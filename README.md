@@ -1,0 +1,153 @@
+# 個人技術術語表(Glossary)— Backend / Frontend / AI
+
+> 收錄全端工程師日常會遇到的核心概念。
+> 程式碼範例以 **Java(Spring Boot / Quarkus)** 與 **JavaScript / TypeScript** 為主,
+> 但多數概念(架構、設計模式、安全、CI/CD、網路、AI)適用於各語言的開發者。
+
+## 使用方式
+
+- 每個術語都附帶 **定義 / 為什麼用 / 範例**(必要時加上反例)
+- 程式碼範例以 **Spring Boot + Lombok** 為主,**Quarkus** 則使用標準 Jakarta EE 寫法;前端範例以 **Vue 3 / TypeScript** 為主
+- 難度標籤:🟢 基礎 / 🟡 中階 / 🔴 進階
+- **單一主場原則(Single Source of Truth)**:同一概念在 Glossary 中**只有一個地方詳述**(canonical home),其他章節若提及只給「一句話 + 連結」;避免內容分裂、易於維護
+
+## 通用詞彙(Quick Reference)
+
+太基礎或太通用、不值得獨立成章節,但在文件中常出現:
+
+- **API**(Application Programming Interface)— 系統對外暴露的「介面」,讓其他程式呼叫使用。可以是類別方法的 API、HTTP REST API、或函式庫 API。
+- **SDK**(Software Development Kit)— 對接某服務或平台的「**開發工具包**」,通常包含 Client 函式庫、文件、範例。例如 AWS Java SDK、Stripe Java SDK——你 import 後就能呼叫對方服務,不用自己組 HTTP 請求。
+- **API ⊂ SDK**:SDK 通常**包裝**底層 API 提供更友善的介面。AWS REST API → AWS Java SDK 把它包成方法呼叫。
+- **DTO**(Data Transfer Object)— 跨層 / 跨網路傳輸用的物件,通常無業務行為。詳見 [A1 程式碼品質](./A1-code-quality.md)。
+- **POJO**(Plain Old Java Object)— 普通 Java 物件,無框架依賴。詳見 [B1 Java 核心](./B1-java-essentials.md#pojo)。
+- **CRUD** — Create / Read / Update / Delete,資料的四種基本操作。
+- **CI / CD** — Continuous Integration / Continuous Delivery / Deployment,自動化建置、測試、部署流程。詳見 [E1 部署與 CI/CD](./E1-deployment-cicd.md)。
+
+## 索引
+
+### A — 通用工程基礎(語言無關)
+
+| # | 主題 | 內容摘要 |
+| --- | --- | --- |
+| A1 | [程式碼品質](./A1-code-quality.md) | SOLID、DRY、KISS、YAGNI、Magic Number/String、Enum、Constants、Lombok、Validation、Value Object、Package Principles、ArchUnit |
+| A2 | [設計模式](./A2-design-patterns.md) | Strategy、Factory、Chain of Responsibility、Singleton、Builder、Observer、Template Method、Adapter、Decorator |
+| A3 | [架構類術語](./A3-architecture.md) | Clean Architecture、Hexagonal、Modulith、Port & Adapter、Bounded Context、Graceful Degradation、DDD、CQRS、Rule Engine |
+| A4 | [開發方法論](./A4-methodology.md) | TDD、BDD、API-First / OpenAPI-Driven、Spec-First、SRS-Driven、Java 主場測試工具、周邊測試工具、MVP |
+| A5 | [i18n / 國際化](./A5-i18n.md) | i18n / l10n、Locale、ResourceBundle / MessageSource、Locale 解析策略、日期/數字/貨幣格式化、前後端 i18n 分工 |
+
+### B — 後端 Java 生態(Spring Boot / Quarkus 視角)
+
+| # | 主題 | 內容摘要 |
+| --- | --- | --- |
+| B1 | [Java 核心](./B1-java-essentials.md) | Optional、Stream、equals/hashCode、Immutability、Thread-Safety、CompletableFuture、Checked vs Unchecked Exception、SPI(ServiceLoader)、AOT vs JIT |
+| B2 | [Spring Boot vs Quarkus](./B2-spring-vs-quarkus.md) | IoC、DI、Bean、Scope、Profile、AutoConfiguration、CDI、JAX-RS、Spring MVC、`@RestController`、API Versioning |
+| B3 | [AOP 與橫切關注點](./B3-aop.md) | Aspect、Pointcut、Advice(Around/Before/After/AfterThrowing)、Cross-Cutting Concerns |
+| B4 | [持久層與資料](./B4-persistence.md) | JPA、Repository、Entity、Blob / Lob、Mapper、MapStruct、Cache、Redis、TDE、Outbox Pattern、CQRS |
+| B5 | [整合與訊息](./B5-integration-messaging.md) | ESB、Apache Camel(Exchange/Processor/Route)、SOAP、JMS、Kafka、RabbitMQ、XML、FTP |
+| B6 | [韌性模式](./B6-resilience.md) | Circuit Breaker、Resilience4j、Retry、Timeout、Bulkhead、Rate Limiter、Fallback、Idempotency |
+| B7 | [Quarkus 專屬概念](./B7-quarkus.md) | GraalVM Native Image、Build-time vs Runtime、Dev Mode、MicroProfile、Panache、SmallRye |
+| B8 | [模板引擎(JSP / Thymeleaf)](./B8-templating.md) | JSP、JSTL、Thymeleaf、JSP vs Thymeleaf 對照、模板引擎 vs SPA 取捨 |
+| B9 | [排程與批次處理](./B9-scheduling-batch.md) | `@Scheduled`(Spring & Quarkus)、Quartz、Spring Batch、Spring Cloud Task、`@Async`、Thread Pool / Executor、排程 vs 批次 vs 非同步 |
+
+### C — 前端
+
+| # | 主題 | 內容摘要 |
+| --- | --- | --- |
+| C1 | [JavaScript / TypeScript](./C1-javascript-typescript.md) | JS、TS、Prototype、Deep Clone、`eval()`、Optional Chaining、Nullish Coalescing、JSX |
+| C2 | [前端框架與生態](./C2-frontend-framework.md) | Vue 2 / Vue 3、React、Angular、Pinia / Vuex、Props / Emit / Event Bus、Vite、Tailwind / Bootstrap、Element Plus、Quasar |
+| C3 | [瀏覽器 / Web API](./C3-browser-web-api.md) | XHR、Fetch、Axios、Cookies、LocalStorage / SessionStorage、Blob |
+
+### D — Web 通用 / 安全
+
+| # | 主題 | 內容摘要 |
+| --- | --- | --- |
+| D1 | [Security / JWT / OAuth](./D1-security-jwt.md) | JOSE 家族(JWT / JWS / JWE / JWK / JWA)、Stateless、Whitelist、AuthN vs AuthZ、ACL/RBAC/ABAC、OAuth 2.0 / OIDC、PKCE、SSO、SLO、SAML、LDAP、AD、Keycloak、Realm Access、FIDO / WebAuthn / Passkey、Role SoT、Hash、Rainbow Table、Argon2id、AES-256、PKI、X.509、CRL / OCSP、Let's Encrypt、Defense in Depth |
+| D2 | [Web 攻擊防禦(CORS / CSRF / XSS)](./D2-web-security.md) | CORS、CSRF、XSS(Stored / Reflected / DOM-based)、CSP、`HttpOnly` Cookie、IDS / IPS |
+| D3 | [網路術語](./D3-networking.md) | RFC、OSI 七層、TCP / UDP、HTTP / HTTPS、HTTP Status、RESTful API、TLS / mTLS、DNS、CDN、Load Balancer L4 vs L7、APISIX(API Gateway)、VPN、MPLS |
+
+### E — 基礎建設與運維
+
+| # | 主題 | 內容摘要 |
+| --- | --- | --- |
+| E1 | [部署與 CI/CD](./E1-deployment-cicd.md) | CI / CD、Jenkins、Docker、Kubernetes、Helm、GitOps、12-Factor App、部署策略、Checkmarx / SonarQube / Snyk、Observability、logrotate、Artifact Repository |
+
+### F — 資料 / 搜尋 / AI
+
+| # | 主題 | 內容摘要 |
+| --- | --- | --- |
+| F1 | [搜尋與文字處理](./F1-search-text.md) | 中文切詞(IK / jieba / HanLP)、TF-IDF / BM25 / Cosine、Word Embedding / Word2Vec / BERT、nd4j、kNN / Dense Vector、向量資料庫、Elasticsearch Analyzer / Custom Scoring、Microsoft Fabric |
+| F2 | [AI Agent 與 LLM 應用](./F2-ai-agent.md) | LLM / Token / Prompt / Context Window、TensorFlow / DL4J / ONNX / DJL、Tool Use、Hermes Agent、Browser Agent、MCP、Spring AI / LangChain4j、RAG、Fine-tuning vs RAG |
+
+## 推薦閱讀順序
+
+```mermaid
+flowchart LR
+    A1[A1 程式碼品質] --> A2[A2 設計模式]
+    A2 --> A3[A3 架構類]
+    A3 --> A4[A4 開發方法論]
+    A3 --> A5[A5 i18n]
+
+    A2 --> B1[B1 Java 核心]
+    B1 --> B2[B2 Spring/Quarkus]
+    B2 --> B3[B3 AOP]
+    B2 --> B4[B4 持久層]
+    B2 --> B5[B5 整合與訊息]
+    B2 --> B6[B6 韌性模式]
+    B2 --> B7[B7 Quarkus]
+    B2 --> B8[B8 模板引擎]
+    B2 --> B9[B9 排程與批次]
+
+    A2 --> C1[C1 JS/TS]
+    C1 --> C2[C2 前端框架]
+    C1 --> C3[C3 瀏覽器 API]
+
+    B2 --> D1[D1 Security/JWT]
+    C3 --> D2[D2 Web 攻擊防禦]
+    D1 --> D2
+    A3 --> D3[D3 網路術語]
+
+    B2 --> E1[E1 部署與 CI/CD]
+    D3 --> E1
+
+    B4 --> F1[F1 搜尋與文字]
+    F1 --> F2[F2 AI Agent / LLM]
+```
+
+- **新手後端**:A1 → A2 → B1 → B2(打底)
+- **熟悉 Java 後端**:A3 → B3 → B4(進階架構)
+- **Quarkus 使用者**:B2 → B7(對照學習)
+- **整合 / 訊息開發**:B5 → B6(訊息系統與韌性)
+- **前端 / 全端切入**:C1 → C2 → C3(JS 語言 → 框架 → 瀏覽器 API)
+- **Web 安全**:D1 → D2(身份 → 攻擊防禦)
+- **DevOps / 部署工程師**:E1 → D3(容器、K8s、CI/CD、12-Factor、網路)
+- **流程 / 規範討論**:A4(開發方法論)
+- **搜尋 / NLP 開發者**:F1(中文切詞、相關性計分、向量搜尋)
+- **AI / LLM 開發者**:F1 → F2(向量搜尋 → LLM Agent / RAG / MCP)
+
+## 關於專有名詞縮寫
+
+文件中遇到陌生縮寫時的查詢順序:
+1 / 來自規範文件的專有名詞 → 該章節
+2 / 通用 IT 縮寫 → 上方「通用詞彙」
+3 / 框架特定 → B2(Spring/Quarkus)、B7(Quarkus 專屬)
+4 / 前端特定 → C1(JS/TS)、C2(框架)、C3(瀏覽器 API)
+5 / 跨章節概念 → 用瀏覽器 `Cmd/Ctrl+F` 全文搜尋
+
+---
+
+## 變更歷程
+
+| 版本 | 日期 | 變更摘要 |
+| --- | --- | --- |
+| 1.0.0 | 2026-04-30 | 初版,基於 `project-init.md` 整理(01~09) |
+| 1.1.0 | 2026-04-30 | 新增 10 整合與訊息、11 韌性模式、12 開發方法論;補強 03 `@RestController` 獨立條目、04 企業身份系統章節;README 加入通用詞彙快速參考 |
+| 1.2.0 | 2026-04-30 | 新增 13 部署與 CI/CD(Jenkins / Docker / K8s / Helm / GitOps / 12-Factor 完整 12 條);補強 03 API Versioning、04 ACL/RBAC/ABAC + 安全原則(Defense in Depth / Least Privilege)、06 Package Principles 六原則(REP/CCP/CRP/ADP/SDP/SAP)、11 Idempotency |
+| 1.3.0 | 2026-05-04 | 新增 14 網路術語(MPLS / TCP / UDP / HTTP / TLS / DNS / CDN / L4 vs L7 / VPN);補強 06 ArchUnit 獨立條目、08 AOT vs JIT 編譯 / Native Compiler、12 周邊測試工具(Selenium / Playwright / Cypress / Jest)、13 Code Quality / Security Scan(Checkmarx / SonarQube / Snyk);Glossary 07 擴充 JpaRepository 完整介面層次與衍生查詢慣例;架構規範 spring-boot-spec 新增 9.8 JpaRepository 使用守則,兩份規範解耦獨立適用 |
+| 1.4.0 | 2026-05-05 | 新增 15 搜尋與文字處理(nd4j / 中文切詞 IK Analyzer・jieba-analysis・HanLP / TF-IDF / BM25 / Cosine Similarity / Word Embedding / Word2Vec / BERT / kNN / 向量資料庫 / Elasticsearch Analyzer・Custom Scoring);補強 12 新增 Java 主場測試工具(JUnit / Mockito / AssertJ / WireMock / Testcontainers)、13 新增 Observability(三大支柱 / ELK Stack / Loki / Prometheus / Datadog / OpenTelemetry / Jaeger・Zipkin)|
+| 1.4.1 | 2026-05-05 | 補強 07 新增「資料初始化」小節 / Seed Data(種子資料)— 涵蓋 prod baseline / dev 開發資料 / test fixture 三情境,工具(Flyway / Liquibase / `data.sql` / `@Sql` / Testcontainers init script / DBUnit),冪等與環境分離規範,反模式案例 |
+| 1.5.0 | 2026-05-05 | 新增 16 AI Agent 與 LLM 應用(LLM 基礎概念 / Token / Prompt / Context Window / Temperature、深度學習函式庫 TensorFlow・DL4J・ONNX Runtime・DJL、AI Agent 概念、Tool Use / Function Calling、Hermes Agent、Browser Agent、MCP、Spring AI / LangChain4j、RAG、Fine-tuning vs RAG);補強 13 新增 Artifact Repository 小節(Sonatype Nexus / JFrog Artifactory / 雲廠 Artifact Registry / Maven 設定範例) |
+| 1.5.2 | 2026-05-13 | 04 新增 XSS 條目(Stored / Reflected / DOM-based 三大類、後端的責任、CSP / HttpOnly / OWASP Java Encoder / Jsoup 等防禦手段、Spring Boot 設定範例、與 CSRF 對照表、Thymeleaf 模板自動 escape 反例);README 04 章摘要群組化為「Web 攻擊防禦(CORS / CSRF / XSS)」 |
+| **2.0.0** | **2026-05-14** | **定位重構**:從「Java 工程師術語表」改為「個人技術術語表 — Backend / Frontend / AI」,反映全端與 AI 學習方向。**章節重編號**為分區字母 + 數字(A1-A5 通用基礎 / B1-B8 後端 Java / C1-C3 前端 / D1-D3 Web 通用 / E1 基建 / F1-F2 資料・AI),共 22 章。**新增 6 章骨架**:A5 i18n、B8 模板引擎、C1 JS/TS、C2 前端框架與生態、C3 瀏覽器 / Web API、D2 Web 攻擊防禦(從原 04 拆出);**既有章節補骨架**:B2 Spring MVC、B4 Blob / Lob、D3 OSI 七層・HTTP Status・RESTful API。新增「單一主場原則」與「📌 個人實戰偏好待補充」流程,新章節以骨架(定義 / 為什麼用 / 預計覆蓋關鍵字 / 範例)形式建立,內容寫作將於後續分階段補完 |
+| **2.1.0** | **2026-05-18** | **新增 B9 排程與批次處理**(`@Scheduled` Spring & Quarkus 合條、Quartz、Spring Batch、Spring Cloud Task、`@Async`、Thread Pool / Executor、排程 vs 批次 vs 非同步三者分工對照),共 7 條,以「排程 / 批次 / 非同步」三區塊組織;**D3 新增 RPC 條目**(含 RPC vs REST vs gRPC vs GraphQL 對照表,RESTful 條目原對照表改為連結引用,符合主場原則);**F2 新增 ACP(Agent Communication Protocol)條目**(含 MCP vs ACP 對照,MCP 條目補連結);章節數 22 → **23** |
+| **2.2.0** | **2026-05-19** | **D1 大幅擴充**:企業身份系統補 **SLO**(Single Logout / Back-Channel logout / SP-Initiated vs IdP-Initiated)、**Keycloak Realm Access**(`realm_access.roles` / `resource_access` / Spring Security JwtAuthenticationConverter / Quarkus role-claim-path)、**FIDO / WebAuthn / Passkey**(phishing-proof 原理 / WebAuthn4J / Keycloak 內建支援);新增 **密碼學與雜湊** 章節:**Hash**(SHA-256 / SHA-3 / 雪崩效應)、**Rainbow Table**(salt / pepper / 現代防禦三條件)、**密碼雜湊**(Argon2id / bcrypt / scrypt / PBKDF2 對照、OWASP 2024 參數、Spring Security `PasswordEncoder`)、**AES-256**(對稱 vs 非對稱、GCM 模式、IV / nonce、Java 範例、KMS 金鑰管理);**D2 新增 IDS / IPS**(Signature vs Anomaly、HIDS vs NIDS、與 WAF 對照、SIEM 整合);**D3 新增 API Gateway 段**:**APISIX**(NGINX + LuaJIT + etcd、Plugin 生態、與 Kong / Envoy / Spring Cloud Gateway 對照、Spring Boot 整合 JWT);**A3 新增 Rule Engine**(Drools / Easy Rules / Camunda DMN、Rete 演算法、Rule Engine vs Strategy Pattern 對照、保險 / 風控 / 反詐欺典型情境);**A4 新增 MVP**(Build-Measure-Learn、Minimum vs Viable、Dropbox / Airbnb / Zappos 範例、MVP vs MMP vs MLP vs PoC vs Prototype 對照);**E1 新增 logrotate**(設定檔範例、Logback RollingFileAppender 對照、雲原生 vs VM 選擇、常見坑);**F1 新增企業資料平台段**:**Microsoft Fabric**(OneLake / Lakehouse vs Warehouse / 與 Databricks / Snowflake / BigQuery 對照、Java OLTP → Fabric OLAP 同步方式) |
+| **2.3.0** | **2026-05-20** | **D1 再次大幅擴充**:JWT 段補 **JOSE 家族總覽**(JWT / JWS / JWE / JWA / JWK)、**JWS**(`alg: none` 攻擊、JWKS / kid、Compact vs JSON Serialization)、**JWE**(5 段式結構、雙金鑰結構、Nested JWT、Nimbus 範例)、OAuth 段補 **PKCE**(`code_verifier` / `code_challenge` / S256、Public Client 必備、與 OAuth 2.1 趨勢);新增 **PKI 與憑證** 段:**PKI**(CA / RA / Relying Party、信任鏈、KeyStore 格式 PKCS#12 / JKS / PEM)、**X.509**(憑證結構、SAN、CSR、DV / OV / EV)、**CRL / OCSP**(CRL 大小 / OCSP 隱私問題、OCSP Stapling、CRLite 趨勢、短壽憑證)、**Let's Encrypt**(ACME / HTTP-01 / DNS-01、Certbot、acme.sh、cert-manager、雲原生 K8s 範例);**B1 新增 SPI**(`META-INF/services/` / `ServiceLoader` / API vs SPI、JDBC Driver 範例、與 Spring DI / CDI 對照、Google AutoService);**C1 新增 `eval()`**(危險原語、XSS 管道、CSP `unsafe-eval`、替代方案、與 Java `Runtime.exec` 類比);**D3 新增規範與標準段**:**RFC**(IETF / Updates vs Obsoletes、MUST/SHOULD/MAY、Java 工程師必知 RFC 清單);**D3 擴充 mTLS**(Spring Boot KeyStore / TrustStore 設定、Service Mesh / Istio / SPIFFE、自簽憑證工具、與 D1 PKI 連結、憑證輪替監控);**B4 新增資料安全段**:**TDE**(SQL Server / Oracle / MySQL / 雲端 RDS 對照、三層金鑰階層、TDE 不防什麼、與 Always Encrypted / field-level encryption 對照、與 D1 AES-256 連結) |

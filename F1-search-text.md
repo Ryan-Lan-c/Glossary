@@ -47,6 +47,8 @@
 
 中文沒有空白做天然分詞(英文有),因此**搜尋之前必須先切詞**。`"我愛吃蘋果"` → `["我", "愛", "吃", "蘋果"]`。切詞的選擇直接影響搜尋品質。
 
+> **底層資料結構**:三家切詞器(IK / jieba / HanLP)的字典查找都建構在 **Trie / DAT(雙陣列 Trie)/ [Aho-Corasick](./G2-algorithms.md#aho-corasick)** 之上——Trie 主場詳見 [G1 Trie(字首樹)](./G1-data-structures.md#trie),AC 自動機詳見 [G2 Aho-Corasick](./G2-algorithms.md#aho-corasick)。
+
 <a id="ik-analyzer"></a>
 ### IK Analyzer 🟡
 

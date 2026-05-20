@@ -62,6 +62,8 @@ flowchart LR
 - [Prometheus + Grafana 🟡](#prometheus)
 - [Datadog / New Relic 🟢](#datadog)
 - [OpenTelemetry 🔴](#otel)
+- [traceparent / tracestate(W3C Trace Context)🟡](#traceparent)
+- [x-request-id(請求關聯 ID)🟢](#x-request-id)
 - [Jaeger / Zipkin(分散式追蹤)🟡](#jaeger-zipkin)
 
 ---
@@ -1093,6 +1095,153 @@ OTel Collector(中間 agent,做轉換 / 路由)
 - **手動**:OTel SDK API 加自訂 span / metric
 
 **現況**:**Traces 已成熟**(取代 Jaeger / Zipkin client),**Metrics 漸普及**,**Logs 還在演進**。新專案應**優先選 OTel**,而非綁特定 vendor SDK。
+
+---
+
+<a id="traceparent"></a>
+### traceparent / tracestate(W3C Trace Context)🟡
+
+**定義**:**W3C Trace Context** 標準(Recommendation 2020-02)定義的 **HTTP header 對**——`traceparent` 帶必要的 trace 識別、`tracestate` 帶 vendor 特定附加資訊,**讓 trace 跨服務、跨平台串接**。
+
+**為什麼是個專有術語**:過去各家分散式追蹤(Jaeger 用 `uber-trace-id`、Zipkin 用 `b3` header、Datadog 用 `x-datadog-*`)各自為政,跨平台串不起來——**W3C Trace Context 統一標準,OTel 全面採用**,現在所有現代系統都該講 `traceparent`。
+
+**`traceparent` 格式**:
+
+```
+traceparent: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01
+              │   │                                │                │
+              │   │                                │                └── trace-flags(01 = sampled)
+              │   │                                └── parent-id(span id,8 bytes hex)
+              │   └── trace-id(全程一致,16 bytes hex)
+              └── version(目前固定 00)
+```
+
+| 欄位 | 長度 | 意思 |
+| --- | --- | --- |
+| `version` | 2 hex | spec 版本,目前 `00` |
+| `trace-id` | 32 hex(16 bytes) | 整條 trace 的識別碼,**跨服務不變** |
+| `parent-id` | 16 hex(8 bytes) | 上游 span 的 ID(下游 server 接到後成為 parent) |
+| `trace-flags` | 2 hex | bit-flag,`01` = sampled,`00` = not sampled |
+
+**`tracestate`**:vendor-specific 鍵值,逗號分隔,**可選**。
+```
+tracestate: rojo=00f067aa0ba902b7,congo=t61rcWkgMzE
+```
+跨平台時各家加自家欄位,接收端不認得的 vendor 直接忽略——**向後相容設計**。
+
+**運作流程**:
+
+```
+Client → Service A:  傳 traceparent(新生成)
+Service A 收到後:
+  - 從 traceparent 取 trace-id 與 parent-id
+  - 建立自己的 span(新 span-id)
+  - 呼叫 Service B 時,把 traceparent 改寫:
+    trace-id 不變,parent-id 換成自己的 span-id
+Service B 收到 → 同樣處理 → 整條鏈在 Jaeger 看是完整樹
+```
+
+**Java 整合**:
+- **OpenTelemetry Java agent**(`-javaagent:opentelemetry-javaagent.jar`)**自動處理** `traceparent` 注入與解析,**程式不需 import**
+- **Spring Boot 3.0+ Micrometer Tracing** 預設用 W3C(可配置切 B3 兼容老服務)
+- **手動傳遞**(跨非 HTTP 邊界,如 Kafka 訊息):用 `W3CTraceContextPropagator` 注入到 message header
+
+**與舊 header 對照**:
+
+| Header | 來源 | 現況 |
+| --- | --- | --- |
+| **`traceparent` / `tracestate`** | **W3C(Recommendation)** | **業界標準** |
+| `b3` / `X-B3-TraceId` 等 | Zipkin(B3 propagation) | 仍廣泛存在,新系統建議遷 W3C |
+| `uber-trace-id` | Jaeger 原生 | 已建議遷 W3C |
+| `x-datadog-trace-id` | Datadog | Datadog agent 仍支援,可雙寫 |
+
+**踩雷**:
+- 服務鏈中有舊系統不認 `traceparent` → **中斷 trace**。對策:Gateway / Sidecar 同時注入 W3C + B3(OTel SDK 可配置 `multi-propagator`)
+- `trace-flags = 00`(not sampled)時,部分 SDK **不會建立 span**——你以為丟資料,其實是上游就沒抽樣
+- 與 [x-request-id](#x-request-id) 概念並列但不重疊:**traceparent 給機器串 trace 用,x-request-id 給人在 log 對齊用**
+
+---
+
+<a id="x-request-id"></a>
+### x-request-id(請求關聯 ID)🟢
+
+**定義**:**業界 de-facto 慣例 header**(**非 RFC**)——一個 request 進入系統時被打上 UUID,**穿透所有服務、寫進每一行 log**,出問題時用這個 ID 撈整條請求的 log。
+
+**為什麼是個專有術語**:
+- 不是任何 spec 定義的——但 NGINX、HAProxy、AWS ALB、Heroku、Cloudflare、Kong、APISIX **全部都會自動注入**這個 header(各家用變體名稱)
+- 與 [traceparent](#traceparent) 不一樣的定位:**給人類在 log 系統(ELK / Loki)裡用一個 ID 撈完整請求**——traceparent 給機器串 trace,x-request-id 給人 grep log
+
+**典型流程**:
+
+```
+Client → Gateway     (沒帶 → Gateway 注入 UUID 到 X-Request-Id)
+Gateway → Service A  (帶上 X-Request-Id)
+Service A 寫每一行 log 都印這個 ID
+Service A → Service B (繼續傳)
+...
+出問題:在 Kibana 搜尋 X-Request-Id = "abc-123"
+     → 看到整條穿透各服務的 log
+```
+
+**Header 命名混亂(現實)**:
+
+| Header | 注入者 |
+| --- | --- |
+| `X-Request-ID` | NGINX、Heroku、最常見的稱呼 |
+| `X-Correlation-ID` | 微服務圈愛用 |
+| `X-Amzn-Trace-Id` | AWS ALB |
+| `CF-Ray` | Cloudflare |
+| `X-Kong-Request-Id` | Kong |
+| `Request-ID` | GitHub API |
+
+各家不統一——**選一個內部標準,Gateway 統一改寫成這個名稱**。
+
+**Spring Boot 整合**(Filter + MDC):
+```java
+@Component
+public class RequestIdFilter extends OncePerRequestFilter {
+    private static final String HEADER  = "X-Request-Id";
+    private static final String MDC_KEY = "requestId";
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req,
+                                    HttpServletResponse resp,
+                                    FilterChain chain)
+            throws ServletException, IOException {
+        String id = req.getHeader(HEADER);
+        if (id == null || id.isBlank()) {
+            id = UUID.randomUUID().toString();
+        }
+        MDC.put(MDC_KEY, id);
+        resp.setHeader(HEADER, id);   // echo 回 client 方便除錯
+        try {
+            chain.doFilter(req, resp);
+        } finally {
+            MDC.remove(MDC_KEY);
+        }
+    }
+}
+```
+
+`logback-spring.xml` pattern 加 `%X{requestId}`:
+```
+%d{ISO8601} [%thread] %-5level [%X{requestId}] %logger{36} - %msg%n
+```
+
+**Quarkus 同理**:用 JAX-RS `ContainerRequestFilter` + `MDC.put`。
+
+**與 traceparent 對照**:
+
+| 維度 | traceparent | x-request-id |
+| --- | --- | --- |
+| 標準性 | **W3C Recommendation** | 業界慣例(無 spec) |
+| 給誰用 | 機器(APM 系統串 trace) | 人(在 log 系統 grep) |
+| 格式 | 嚴格(`version-traceId-spanId-flags`) | UUID / 任意字串 |
+| 跨服務改寫 | parent-id 每段都換新 | 整條不變 |
+| 採樣 | 受 trace-flags 控制 | 永遠 100%(只是個 UUID,沒成本) |
+| 何時需要 | 有 APM / 分散式追蹤系統 | **每個系統都該有**(零依賴、零成本) |
+
+**最低限度建議**:沒接 OTel / Jaeger 也沒關係,**至少把 x-request-id 接起來**——出事時 grep log 一秒撈完整鏈路,投資報酬率最高。
 
 ---
 

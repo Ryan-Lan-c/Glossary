@@ -194,11 +194,7 @@ public List<Item> recommend(UserId id) { ... }
 - 保護自己(避免被惡意呼叫打死)
 - 計費(同一 client 一天最多 N 次)
 
-**演算法**:
-- **Token Bucket**(令牌桶):桶內有 N 個 token,每秒補 M 個,每次呼叫消耗 1 個。允許短暫突發。
-- **Leaky Bucket**(漏桶):呼叫進桶,漏出速度固定。平滑流量。
-- **Fixed Window**:每分鐘計數歸零(邊界附近有突刺問題)
-- **Sliding Window**:滑動視窗計數,平滑
+**演算法**:Token Bucket、Leaky Bucket、Fixed Window、Sliding Window 四種——**演算法細節與對照詳見 [G2 Rate Limiting Algorithms](./G2-algorithms.md#rate-limiting)**。本節聚焦韌性模式與 Resilience4j 配置。
 
 **Resilience4j 範例**(基於 Atomic Token Bucket):
 ```java

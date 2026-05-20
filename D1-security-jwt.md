@@ -32,6 +32,7 @@
 - [Active Directory(AD)🟡](#ad)
 - [Keycloak 🟡](#keycloak)
 - [Keycloak Realm Access 🟡](#realm-access)
+- [Auth0(IDaaS SaaS)🟡](#auth0)
 - [FIDO / WebAuthn / Passkey 🟡](#fido)
 - [Role Source of Truth 🟡](#role-sot)
 
@@ -955,6 +956,68 @@ quarkus.oidc.roles.role-claim-path=realm_access/roles    # 路徑用 / 分隔 ne
 
 ---
 
+<a id="auth0"></a>
+### Auth0(IDaaS SaaS)🟡
+
+**定義**:Okta 旗下的 **Identity-as-a-Service(IDaaS)SaaS** 平台,**Keycloak 的商業 SaaS 對手**——提供 OIDC / OAuth 2.0 / SAML、社群登入、MFA、自訂登入流程(Rules / Actions / Flows),按 **MAU(月活躍用戶)階梯收費**(7K MAU 以下免費)。
+
+**為什麼選 Auth0 而不是 Keycloak**:
+
+| 維度 | Keycloak(自架 OSS) | Auth0(SaaS) |
+| --- | --- | --- |
+| 部署 | 自己維運(VM / K8s) | 零維運(Okta 託管) |
+| 成本 | 機器 + 人力 | 按 MAU 階梯 |
+| 客製化 | 可改原始碼 | Actions(Node.js 沙箱) |
+| 資料留存 | 自己機房 | Auth0 tenant(可選 region) |
+| 合規 | 自己負責 | 內建 SOC2 / GDPR / HIPAA / ISO 27001 |
+| 適合 | 在地法規嚴格、資料敏感、流量大 | 中小型新創、要快速上線 MFA / 社群登入 |
+
+**核心概念**:
+- **Tenant** — 隔離單位(類似 Keycloak Realm),一個 tenant 一個 `*.auth0.com` 子網域
+- **Application** — 接入 Auth0 的應用(SPA / Web / Native / M2M 四種)
+- **API**(Resource Server)— 被保護的後端,定義 scopes / permissions
+- **Connection** — 身份來源(Database / Social / Enterprise SAML / LDAP / Active Directory)
+- **Rules / Actions / Flows** — 登入流程中插入自訂邏輯(加 claim、阻擋、補資料);**Rules 已 deprecated**,**Actions 為現行標準**(2022 起)
+
+**JWT 結構特性**:
+- **Issuer**:`https://YOUR_TENANT.auth0.com/`
+- **角色 / 權限**預設**不在** `realm_access`(那是 [Keycloak](#realm-access)),而是:
+  - **Permissions** in `permissions` array(需在 Dashboard 開 API 的 RBAC + Add Permissions to Access Token)
+  - **Custom claims** 透過 Actions 加,**必須用 namespaced URL**(`https://example.com/roles`)避免與 OIDC 標準 claim 衝突——這是 OIDC spec 要求
+- **跨平台對接時這是和 [Keycloak Realm Access](#realm-access) 並列的主要踩坑點**
+
+**Spring Boot 整合**(Resource Server):
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://your-tenant.auth0.com/
+          # 自動抓 JWKS,與 Keycloak 用法一致
+          audiences: https://api.example.com
+          # 必須驗 aud,Auth0 預設 aud 是 Dashboard 設的 API identifier
+```
+
+**SPA 整合**(`@auth0/auth0-spa-js`):前端用 [PKCE](#pkce) + silent renew,token 放 memory(**不放 localStorage**,防 XSS)。
+
+**對照 Keycloak / Okta / Cognito / Firebase**:
+
+| 產品 | 定位 | 適合 |
+| --- | --- | --- |
+| **Auth0** | DX 友善的 IDaaS,B2C 開發者首選 | SPA / Mobile / B2C |
+| **Okta**(母公司) | 企業級 IAM | B2B SSO、員工 IT(Office 365 / Salesforce 整合) |
+| **Keycloak** | 自架 OSS IAM | 在地化、資料敏感、預算限制 |
+| **AWS Cognito** | AWS-native | 已在 AWS 生態 |
+| **Firebase Authentication** | Google 生態 | Mobile-first、整合 Firestore / FCM |
+
+**現況**:
+- **2021 被 Okta 收購**(US$ 6.5B),仍以獨立品牌運營
+- Auth0 + Okta 合併讓他們從「B2C 開發者首選」延伸到企業 IAM 市場
+- 與 Keycloak 在 OIDC / SAML 上**完全相容**(都是 spec compliant),從 Keycloak 遷移 Auth0 通常只改 `issuer-uri` 與 role claim 路徑
+
+---
+
 <a id="fido"></a>
 ### FIDO / WebAuthn / Passkey 🟡
 
@@ -1142,7 +1205,100 @@ fcea920f7412b5da7be0cf42b8c93759  1q2w3e4r
 ...                               ...
 ```
 
-實際彩虹表用 **reduction function** 把 hash 再映射回密碼空間,鏈式儲存,**節省儲存空間**(原始全表存不下)。
+**鏈式壓縮(Chain Compression)**:
+
+直接存全部 (密碼, hash) 在實務上不可行——8 位英數密碼約需 5000 TB。彩虹表的核心技巧是**只存鏈頭與鏈尾,中間全部丟掉**,把空間壓到 1/N(N 為鏈長,實務上 10,000~100,000)。
+
+**兩個函數**:
+- **H** — 真正的 hash 函數(MD5、SHA-1...)
+- **R_i** — reduction function:把 hash 值**映射回**密碼空間中的某個字串。**不是 hash 的反函數**(hash 不可逆),只是一個壓縮對應。每個位置使用**不同的 R**——這就是「彩虹」的由來,稍後解釋為何必要。
+
+**建鏈**:從起始密碼 `p0` 出發,交替套用 H 與 R 走 N 步,只存鏈頭與鏈尾:
+
+```
+p0 ─H→ h0 ─R0→ p1 ─H→ h1 ─R1→ p2 ─H→ h2 ─R2→ p3 ─H→ h3
+↑                                                       ↑
+鏈頭(儲存)                                          鏈尾(儲存)
+```
+
+中間的 `p1, p2, p3, h0, h1, h2` 全部丟掉,**需要時從鏈頭重算**。
+
+---
+
+**玩具範例**(N=4, 3 條鏈, 密碼空間 = "000"~"999", H 與 R 都是假函數):
+
+建鏈過程的完整 trace(實際只有最左和最右兩欄存到 disk):
+
+```
+鏈 1: "000" ─H→ "@K9P" ─R0→ "472" ─H→ "#X3M" ─R1→ "819" ─H→ "&Q7Z" ─R2→ "265" ─H→ "%T4N"
+鏈 2: "100" ─H→ "!L2W" ─R0→ "638" ─H→ "$M8V" ─R1→ "194" ─H→ "^B5R" ─R2→ "701" ─H→ "@F1Y"
+鏈 3: "200" ─H→ "*N6S" ─R0→ "552" ─H→ "~G3D" ─R1→ "087" ─H→ "+J0X" ─R2→ "913" ─H→ "=E9C"
+```
+
+Disk 上實際儲存:
+
+| 鏈頭 (p0) | 鏈尾 (h3) |
+| --- | --- |
+| "000" | "%T4N" |
+| "100" | "@F1Y" |
+| "200" | "=E9C" |
+
+3 條鏈 cover 12 個密碼,只存 3 筆 → 空間壓縮 4 倍(實務上 N=10,000 → 壓縮 1 萬倍)。
+
+---
+
+**查表流程**:假設攻擊者拿到 X = `"!L2W"`,想反推對應密碼。
+
+每次嘗試「**假設 X 位於位置 k**」,從 X 套一連串 R 和 H 算出**候選鏈尾**,對鏈尾索引查一次。包裝層數隨位置遞增:
+
+| X 假設位於 | 候選值算式 |
+| --- | --- |
+| 倒數第 1 (h3) | `X` |
+| 倒數第 2 (h2) | `H(R2(X))` |
+| 倒數第 3 (h1) | `H(R2(H(R1(X))))` |
+| 倒數第 4 (h0) | `H(R2(H(R1(H(R0(X))))))` |
+
+**規律**:最內層的 R 下標 = 假設位置;往外每多包一層 H+R,R 的下標 +1,最外層永遠以 H 結尾。
+
+對 X = `"!L2W"` 跑一次:
+
+| 嘗試 | 候選值 | 鏈尾索引查找 |
+| --- | --- | --- |
+| 1 | `"!L2W"` | 沒命中 |
+| 2 | `H(R2(X))` | 沒命中 |
+| 3 | `H(R2(H(R1(X))))` | 沒命中 |
+| 4 | `H(R2(H(R1(H(R0(X))))))` = `"@F1Y"` | **命中鏈 2** |
+
+命中後,從鏈 2 鏈頭 `"100"` 重走鏈條找出 X 的位置:
+
+| 步驟 | 動作 | 值 | = X? |
+| --- | --- | --- | --- |
+| 0 | p0 | `"100"` |  |
+| 1 | H(p0) | `"!L2W"` | **Yes** → 密碼 = `"100"` |
+
+**關鍵觀念**:每次「嘗試」只算一個候選值、做一次索引查找——**與「存了幾條鏈」無關**(鏈條數只影響鏈尾索引大小,查找仍是 O(log n) 或 O(1))。整體查表 = N 個位置 × 每次 O(N) 運算 = **O(N²) 算力換 1/N 空間**。
+
+---
+
+**False Alarm(誤報)**:R 是 **many-to-one** 函數——把巨大的 hash 空間壓進小的密碼空間,**多個不同的 hash 經過 R 都會映射到同一個密碼**。導致查表時可能誤報:候選值 = 某條鏈尾,但 X 其實**不在**那條鏈裡。
+
+**例子**:攻擊者拿到 X = `"ZZZZ"`(對應的密碼**不在表內**),但 `R2("ZZZZ")` 碰巧等於 `R2("^B5R") = "701"`:
+
+```
+鏈 2 合法路徑:    "^B5R" ─R2→ "701" ─H→ "@F1Y" (鏈尾)
+False alarm 路徑: "ZZZZ" ─R2→ "701" ─H→ "@F1Y" (剛好命中同個鏈尾)
+```
+
+兩條路徑在 `"701"` 處會合 → H 是確定性函數,後續必然算出同個鏈尾 `"@F1Y"`。攻擊者以為命中,從鏈 2 鏈頭走完整條鏈卻找不到 X → 浪費 O(N) 運算,回頭嘗試下一個位置 k。
+
+**為何每個位置要用不同的 R**:若整鏈共用同一個 R,兩條鏈中途撞值就會**永久合併**(chain merge),覆蓋率大幅下降。用 N 個不同的 R 讓「撞同值」只能發生在**同一位置**——機率降低 N 倍,鏈條才能保持獨立。
+
+| 撞的種類 | 時機 | 後果 |
+| --- | --- | --- |
+| **False alarm** | 查表時 | 白走一條鏈,正確性不受影響 |
+| **Chain merge** | 建表時 | 兩鏈合併,永久浪費儲存與覆蓋率 |
+
+不同 R 主要解決 chain merge;false alarm 是 R 壓縮的本質代價,不可避免。**這就是「Rainbow」二字的工程意義**——N 個不同的 R 排列起來像彩虹的不同顏色。
 
 **Salt 如何破解 Rainbow Table**:
 - **Salt** = 給每個使用者一段**隨機字串**,hash 前混入(`hash(password + salt)`)

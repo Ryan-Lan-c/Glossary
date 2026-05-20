@@ -29,6 +29,7 @@ Java 工程師雖然不直接配置網路設備,但**部署、跨機房連線、
 - [HTTP Status Codes 🟢](#http-status)
 - [RPC(Remote Procedure Call)🟡](#rpc)
 - [RESTful API 🟡](#restful)
+- [WebSocket 🟡](#websocket)
 - [TLS / mTLS 🟡](#tls-mtls)
 
 ### 名稱解析與內容傳遞
@@ -40,6 +41,7 @@ Java 工程師雖然不直接配置網路設備,但**部署、跨機房連線、
 
 ### API Gateway
 - [APISIX(雲原生 API Gateway)🟡](#apisix)
+- [Kong(API Gateway)🟡](#kong)
 
 ### 企業網路
 - [VPN 🟡](#vpn)
@@ -418,6 +420,105 @@ User u = stub.getUser(GetUserRequest.newBuilder().setId(123).build());
 
 ---
 
+<a id="websocket"></a>
+### WebSocket 🟡
+
+**定義**:**RFC 6455** 定義的**全雙工持久連線**協定——client 與 server 透過 HTTP/1.1 Upgrade handshake 升級成 WebSocket 連線後,雙方可**主動推訊息**,**沒有 request / response 的概念**。
+
+**為什麼用**:
+- 即時應用(聊天、協作、線上遊戲、股市報價、通知 push)
+- 取代 **Long Polling**(每秒打 HTTP,**浪費 header + TCP 開銷**)
+- 與 HTTP/2 / HTTP/3 server push 不同——WebSocket 是**雙向**訊息流,push 仍受限於 request 啟動
+
+**握手與 Frame 結構**:
+
+```
+1) Client → Server (HTTP/1.1 Upgrade)
+GET /chat HTTP/1.1
+Host: example.com
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+
+2) Server → Client (101 Switching Protocols)
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+
+3) 之後雙方在同一個 TCP 連線上交換 frame
+   Frame: [opcode][payload length][mask][payload]
+   opcode: 0x1 text / 0x2 binary / 0x8 close / 0x9 ping / 0xA pong
+```
+
+**與其他即時技術對照**:
+
+| 技術 | 方向 | 連線 | 適合 |
+| --- | --- | --- | --- |
+| **WebSocket** | 全雙工 | 持久 TCP | 雙向即時(聊天、協作) |
+| **SSE**(Server-Sent Events) | 單向(server → client) | 持久 HTTP | server push 為主(通知、即時報價,client 不需推) |
+| **Long Polling** | 偽即時 | 不停重連 | 老瀏覽器相容、無法升級的環境 |
+| **HTTP/2 Server Push** | server → client | HTTP/2 multiplexed | 推資源(JS / CSS),非任意訊息 |
+| **WebRTC DataChannel** | P2P 全雙工 | UDP-based(SCTP over DTLS) | P2P 低延遲(視訊、遊戲) |
+
+**子協定(Sub-Protocols)**:WebSocket 只規範 frame,**訊息格式由應用層自定**。常見子協定:
+- **STOMP** — Simple Text Oriented Messaging Protocol,類訊息佇列的 pub/sub(Spring 主推)
+- **MQTT over WebSocket** — IoT
+- **GraphQL Subscription** — `graphql-ws` 標準
+- **socket.io 自家協定** — Node.js 圈,可自動 fallback Long Polling
+
+**Spring Boot 整合**(STOMP):
+```java
+@Configuration
+@EnableWebSocketMessageBroker
+public class WsConfig implements WebSocketMessageBrokerConfigurer {
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.addEndpoint("/ws").withSockJS();
+    }
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry config) {
+        config.enableSimpleBroker("/topic");                // server → client 訂閱
+        config.setApplicationDestinationPrefixes("/app");   // client → server 送
+    }
+}
+
+@Controller
+class ChatController {
+    @MessageMapping("/chat")
+    @SendTo("/topic/messages")
+    public ChatMessage handle(ChatMessage msg) { return msg; }
+}
+```
+
+**Quarkus 整合**(Jakarta WebSocket):
+```java
+@ServerEndpoint("/chat/{room}")
+@ApplicationScoped
+public class ChatSocket {
+    @OnOpen
+    public void onOpen(Session s, @PathParam("room") String room) { /* ... */ }
+
+    @OnMessage
+    public void onMessage(String msg, Session s) { /* ... */ }
+
+    @OnClose
+    public void onClose(Session s) { /* ... */ }
+}
+```
+
+**常見坑**:
+- **Sticky session**:多實例部署時,WS 連線必須打到同一台後端——Gateway / LB 需配 sticky(如 [APISIX](#apisix) `chash`、[Kong](#kong) `hash_on`),否則重連會掉狀態
+- **Auth**:WebSocket handshake 是 HTTP,可帶 Cookie / Authorization header;**但後續 frame 不會重驗,初次握手就要確認身份**
+- **代理穿透**:有些企業 Proxy 不支援 Upgrade,需 fallback 到 SockJS / Long Polling
+- **與 HTTP/2 不能無縫升級**:**RFC 8441** 定義了 WebSocket over HTTP/2,但採用率仍低;多數 client / server 預設仍是 HTTP/1.1 + WebSocket
+- **連線數限制**:每個 WS 都吃一條 TCP + 記憶體(buffer),百萬連線需 epoll / Netty 級別 server,Tomcat NIO connector 上限有限——大規模 IM 系統通常用 Netty 直接寫,不用 Spring MVC
+
+**前端 API**:詳見 [C3 WebSocket(瀏覽器視角)](./C3-browser-web-api.md#websocket)。
+
+---
+
 <a id="tls-mtls"></a>
 ### TLS / mTLS 🟡
 
@@ -691,6 +792,75 @@ flowchart LR
 - Apache APISIX 是中國雲原生圈主推方案,**全球採用度漸升**
 - 與 Kong 並列為雲原生 API Gateway 兩大開源領導者
 - 新建系統若有 Spring / Java 既有生態,**Spring Cloud Gateway** 也是合理選項(同團隊維護)
+
+---
+
+<a id="kong"></a>
+### Kong(API Gateway)🟡
+
+**定義**:**Kong Gateway**——2015 Mashape 開源、目前由 Kong Inc. 主導的 **API Gateway 老牌領導者**,基於 **NGINX + LuaJIT**(同 [APISIX](#apisix)),但**更早問世、生態最大、商業版 Kong Enterprise / SaaS 版 Konnect 完整**。
+
+**核心架構**:
+- **Kong Gateway**(OSS)— 核心 proxy
+- **Kong Manager**(Enterprise GUI)— 管理 console
+- **Konnect**(SaaS)— 託管控制平面,自己只跑 data plane
+- **Kong Mesh** — Kuma-based service mesh,做東西向流量
+- 配置存 **PostgreSQL / Cassandra**,或 **DB-less**(YAML 宣告式)
+
+**Plugin 生態**(280+):
+- **Auth**:Key Auth / JWT / OAuth2 / OIDC / LDAP / mTLS
+- **流量**:Rate Limiting / Request Size / Proxy Cache
+- **轉換**:Request / Response Transformer / Correlation ID
+- **可觀測性**:Prometheus / Zipkin / Datadog / OpenTelemetry
+- **AI Gateway**(2024 新方向):LLM proxy、Token rate limit、Prompt guard
+
+**APISIX vs Kong 對照**:
+
+| 維度 | Kong | APISIX |
+| --- | --- | --- |
+| 出生年 | 2015 | 2019 |
+| 配置儲存 | **PostgreSQL / Cassandra / DB-less** | **etcd** |
+| 熱更新 | ✅(DB-less 較快;DB 模式有 cache lag) | ✅ **毫秒級** |
+| 效能 | 中(NGINX 級) | **高**(基於 OpenResty 改良) |
+| Plugin 數 | 280+ | 100+ |
+| 多語言 plugin | Go / JS / Python(Plugin Server) | Java / Go / Python / JS |
+| SaaS / Enterprise | **Konnect**(成熟) | API7(較小) |
+| 社群活躍度 | 高(歷史最久) | 高(中國雲原生圈強勢) |
+| AI Gateway | 已內建 | 部分 |
+
+**Kong 路由 + JWT plugin 範例**(declarative YAML):
+```yaml
+_format_version: "3.0"
+services:
+  - name: order-service
+    url: http://order-service:8080
+    routes:
+      - name: orders
+        paths: [/api/orders]
+    plugins:
+      - name: jwt
+        config:
+          claims_to_verify: [exp]
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+      - name: prometheus
+```
+
+**Kong 在 K8s 的位置**:
+- **Kong Ingress Controller** — 作為 K8s Ingress 實作,**可取代 NGINX Ingress**;支援 CRD `KongPlugin`、`KongConsumer` 等
+- 與 Istio / Linkerd 互補:**Kong 南北向(API Gateway),Service Mesh 東西向(服務間)**
+
+**Java 工程師會遇到**:
+- 公司既存系統有 Kong 時,**Spring Security 仍需驗證身份**(Kong JWT plugin 過 token 後,可傳 `X-Consumer-Id` / `X-Userinfo` header 給後端)
+- 排錯時要查 **Kong access log + 後端 log**——`X-Kong-Request-Id` 用於串連(同 [x-request-id](./E1-deployment-cicd.md#x-request-id))
+- **Konnect SaaS** 適合**不想自己維運 Kong** 的團隊(但 data plane 仍跑在自家 VPC,只是控制平面 SaaS 化)
+
+**選 Kong 還是 APISIX**:
+- 老團隊、生態優先、需企業 SaaS、AI Gateway 場景 → **Kong**
+- 新建系統、追求效能、雲原生、etcd 既有 → **APISIX**
+- 兩者底層同源(NGINX + Lua),**性能差距已不顯著,選擇主要看生態與企業支援**
 
 ---
 

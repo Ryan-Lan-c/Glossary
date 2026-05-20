@@ -21,6 +21,9 @@
 ### 二進位資料
 - [Blob 🟡](#blob)
 
+### 即時通訊
+- [WebSocket(瀏覽器視角)🟡](#websocket)
+
 ---
 
 ## HTTP 客戶端
@@ -379,6 +382,44 @@ URL.revokeObjectURL(url);   // 用完釋放(避免記憶體洩漏)
 | `Uint8Array` | 視 ArrayBuffer 為 byte 陣列 | 操作位元組 |
 
 **與後端 Java `Blob` 對照**:詳見 [B4 Blob / Lob](./B4-persistence.md#blob-lob)——**都叫 Blob 但是不同層次的東西**:後端是 DB 大型物件型別,前端是瀏覽器二進位抽象。
+
+---
+
+## 即時通訊
+
+<a id="websocket"></a>
+### WebSocket(瀏覽器視角)🟡
+
+**主場詳見** [D3 WebSocket](./D3-networking.md#websocket)——含協定握手、frame 結構、子協定(STOMP / MQTT / GraphQL Subscription)、Spring `@MessageMapping` / Quarkus `@ServerEndpoint` 整合、Sticky session 等議題。本節僅補瀏覽器端 API 與生態。
+
+**瀏覽器原生 API**:
+```javascript
+const ws = new WebSocket("wss://example.com/chat");
+
+ws.onopen = () => ws.send("hello");
+ws.onmessage = (e) => console.log(e.data);
+ws.onclose = () => console.log("closed");
+ws.onerror = (e) => console.error(e);
+
+// 主動關閉
+ws.close(1000, "bye");
+```
+
+**常用前端 wrapper**:
+
+| 套件 | 用途 | 配套後端 |
+| --- | --- | --- |
+| **socket.io-client** | 與 socket.io server 配套,自動 fallback Long Polling | Node.js(socket.io) |
+| **STOMP.js / @stomp/stompjs** | STOMP 子協定 client | Spring `@MessageMapping` |
+| **graphql-ws** | GraphQL Subscription 標準 | Apollo Server / Hasura |
+| **mqtt.js** | MQTT over WebSocket | IoT broker(EMQX / Mosquitto) |
+
+**與 [Fetch](#fetch) / [Axios](#axios) 關係**:WebSocket 是**獨立協定**,**不走 HTTP client**——但 handshake 階段是 HTTP,**可以共用 Cookie / Authorization**(同源 + `credentials: 'include'`),所以登入後的身份能無痛延續到 WS 連線。
+
+**踩雷**:
+- **不能在握手後改 header**:第一次連線時 header 帶什麼就什麼,中途 token 過期沒法更新——常見對策是過期前主動 `close()` 重連
+- **瀏覽器限制 6 個並發**(對應同網域,**和 HTTP/1.1 同公平池**):大量分頁可能撞上限
+- **Heroku / 部分 PaaS 預設 30 秒閒置斷線**:需自己定期 send ping 或調整 platform 設定
 
 ---
 

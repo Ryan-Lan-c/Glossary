@@ -967,13 +967,70 @@ flowchart LR
 - **方式 2**:用 `logback-logstash-encoder` 直接送 JSON 到 Logstash
 - **MDC** 帶 `correlationId` / `userId` / `traceId`,Kibana 可依此搜尋
 
+#### Kibana 重點功能
+
+**定義**:**Elastic Stack 的官方 UI 與資料探索層**——上層介面對 Elasticsearch 做查詢、視覺化、儀表板、告警。**Java 後端工程師最常用的兩件事:Discover 查 log + Dashboard 看服務狀態**。
+
+**核心模組**:
+
+| 模組 | 用途 | Java 工程師日常用法 |
+| --- | --- | --- |
+| **Discover** | 互動式查詢 log / 文件 | 出事時第一個打開的頁面,搭配 KQL 查 `level:ERROR and service:"order"` |
+| **Visualize / Lens** | 拖拉式圖表(Lens 較新且推薦) | 畫服務 QPS / Error Rate 走勢 |
+| **Dashboard** | 多個 Visualize 組合成儀表板 | 看板掛 NOC 大螢幕、值班用 |
+| **Alerting**(Stack 7.11+ 內建) | 規則觸發 → Webhook / Email / Slack | 「5 分鐘內 ERROR > 50 筆」自動通知 |
+| **Maps** | 地理視覺化 | IP 來源地圖、Geo Heatmap |
+| **Canvas** | 像簡報的自由排版視覺化 | 對外秀的 KPI 大圖 |
+| **Dev Tools** | Console 直接打 Elasticsearch REST API | debug query DSL、看 mapping、改 index settings |
+| **Stack Management** | Index / Data View / User / Role / Saved Object 管理 | DevOps 場景 |
+
+**KQL(Kibana Query Language)— 最常用語法**:
+
+```text
+status:500                                      # 等於
+status >= 400 and status < 500                  # 範圍
+service:"order-service" and not level:DEBUG     # 邏輯組合
+message:*timeout*                               # 萬用字元(注意效能)
+@timestamp >= now-15m                           # 相對時間
+host.name:("api-01" or "api-02")                # 多值
+```
+
+> Kibana 同時支援舊版 Lucene 查詢語法(`AND` / `OR` 大寫、欄位 `:` 後接 Lucene 語法),搜尋列右上角可切換,**新版預設 KQL**。
+
+**Index Pattern → Data View(8.x 新術語)**:
+- **舊術語**:Index Pattern(指向 Elasticsearch 一組 index 的 glob,例 `logstash-*`)
+- **新術語**:**Data View**(Kibana 8.x 開始改名,功能不變)
+- **沒設定 Data View → Discover 是空白頁**,新人最常踩
+
+**Spaces(多租戶隔離)**:
+- 同一個 Kibana 實例分多個 Space(team-a / team-b / production / staging)
+- Saved Object(Dashboard / Visualize / Alert)各自獨立,角色權限可分 Space 設定
+- 不是強隔離(資料層仍是同一 Elasticsearch),適合**團隊看板分隔**而不是安全邊界
+
+**Kibana vs Grafana**(常被拿來比):
+
+| | Kibana | Grafana |
+| --- | --- | --- |
+| 主場 | **Log analytics + 全文搜尋**(Discover) | **Metrics + 多資料源視覺化** |
+| 後端 | 綁定 Elasticsearch / OpenSearch | 支援數十種(Prometheus / Loki / ES / MySQL / Tempo / Jaeger) |
+| Dashboard 編輯 | Lens / Visualize | Panel + PromQL / LogQL |
+| Alerting | 7.11+ 內建 | 9.0+ Unified Alerting,成熟 |
+| 適合 | ELK 全套使用者、需要強大 log 查詢 | metrics 為主、多資料源整合 |
+
+**常見坑**:
+- **時區**:Kibana 預設用瀏覽器時區,團隊跨時區常看不到「同一時間點」的資料 → `Stack Management > Advanced Settings > dateFormat:tz` 統一設 UTC
+- **Default time range 預設 15 分鐘**:打開 Discover 看不到資料常是時間區間太短 → 設成「Last 24 hours」或自訂
+- **Data View 萬用字元設太寬**:`*` 會被吃進所有 internal index(`.kibana`、`.security` 等),查詢變慢
+- **Saved Object 沒備份**:Dashboard / Visualize 都存在 `.kibana` index,**升級或重建要先 Export Saved Objects**(Stack Management > Saved Objects)
+- **Role 與 Elasticsearch Role 耦合**:Kibana 的 Space 角色實際綁定 ES Role,**配置在 Kibana 端做,但底層權限是 ES 的**
+
 **痛點**:
 - Elasticsearch **吃資源凶**(記憶體、磁碟、CPU)
 - Hot-Warm-Cold 架構複雜
 - 大量資料保留成本高
 
 **對比**:
-- **OpenSearch**:AWS fork 的 Elasticsearch(2021 年因授權爭議分家),功能幾乎等同
+- **OpenSearch / OpenSearch Dashboards**:AWS fork 的 Elasticsearch + Kibana(2021 年因授權爭議分家),功能幾乎等同,Kibana 對應 OpenSearch Dashboards
 - **Splunk**:商業老牌,功能完整但**極貴**,大企業常用
 - **Loki**(下一條)是輕量替代
 

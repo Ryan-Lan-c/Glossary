@@ -32,7 +32,8 @@
 - [Active Directory(AD)🟡](#ad)
 - [Keycloak 🟡](#keycloak)
 - [Keycloak Realm Access 🟡](#realm-access)
-- [Auth0(IDaaS SaaS)🟡](#auth0)
+- [Entra ID(Microsoft 雲端身份)🟡](#entra-id)
+- [Auth0(SaaS 身份平台)🟡](#auth0)
 - [FIDO / WebAuthn / Passkey 🟡](#fido)
 - [Role Source of Truth 🟡](#role-sot)
 
@@ -956,65 +957,211 @@ quarkus.oidc.roles.role-claim-path=realm_access/roles    # 路徑用 / 分隔 ne
 
 ---
 
-<a id="auth0"></a>
-### Auth0(IDaaS SaaS)🟡
+<a id="entra-id"></a>
+### Entra ID(Microsoft 雲端身份)🟡
 
-**定義**:Okta 旗下的 **Identity-as-a-Service(IDaaS)SaaS** 平台,**Keycloak 的商業 SaaS 對手**——提供 OIDC / OAuth 2.0 / SAML、社群登入、MFA、自訂登入流程(Rules / Actions / Flows),按 **MAU(月活躍用戶)階梯收費**(7K MAU 以下免費)。
+**定義**:Microsoft 的**雲端 IAM 服務**,前身為 **Azure Active Directory(Azure AD)**,於 **2023 年 7 月正式改名為 Microsoft Entra ID**。**Microsoft 365 / Azure / Dynamics 365 / GitHub Enterprise 等微軟生態的身份基礎**,也是企業 B2B SaaS 對接客戶的事實標準之一。
 
-**為什麼選 Auth0 而不是 Keycloak**:
+**Entra 是「傘狀品牌」**,Entra ID 只是家族中的一個產品:
 
-| 維度 | Keycloak(自架 OSS) | Auth0(SaaS) |
-| --- | --- | --- |
-| 部署 | 自己維運(VM / K8s) | 零維運(Okta 託管) |
-| 成本 | 機器 + 人力 | 按 MAU 階梯 |
-| 客製化 | 可改原始碼 | Actions(Node.js 沙箱) |
-| 資料留存 | 自己機房 | Auth0 tenant(可選 region) |
-| 合規 | 自己負責 | 內建 SOC2 / GDPR / HIPAA / ISO 27001 |
-| 適合 | 在地法規嚴格、資料敏感、流量大 | 中小型新創、要快速上線 MFA / 社群登入 |
+| 產品 | 角色 |
+| --- | --- |
+| **Entra ID**(舊 Azure AD) | 雲端 IAM、SSO、MFA、Conditional Access |
+| **Entra ID Governance** | 權限治理、Access Review |
+| **Entra Verified ID** | Decentralized ID(W3C DID/VC) |
+| **Entra Permissions Management** | 多雲 CIEM(雲端權限管理) |
+| **Entra Internet Access / Private Access** | SSE / ZTNA |
+
+> **Entra ID ≠ Active Directory(AD)**:**雲端版,協定改用 OAuth 2.0 / OIDC / SCIM**,與地端 AD 的 LDAP / Kerberos 是兩套不同協定。詳見 [AD](#ad)。
+
+**為什麼選 Entra ID**:
+- 已用 Microsoft 365 / Azure,身份系統零成本接續
+- B2B SaaS 對企業客戶必備(客戶 99% 都用 Microsoft 帳號登入)
+- 比 Keycloak / Auth0 在 Office 生態整合度高(Outlook、Teams、SharePoint 直通)
 
 **核心概念**:
-- **Tenant** — 隔離單位(類似 Keycloak Realm),一個 tenant 一個 `*.auth0.com` 子網域
-- **Application** — 接入 Auth0 的應用(SPA / Web / Native / M2M 四種)
-- **API**(Resource Server)— 被保護的後端,定義 scopes / permissions
-- **Connection** — 身份來源(Database / Social / Enterprise SAML / LDAP / Active Directory)
-- **Rules / Actions / Flows** — 登入流程中插入自訂邏輯(加 claim、阻擋、補資料);**Rules 已 deprecated**,**Actions 為現行標準**(2022 起)
 
-**JWT 結構特性**:
-- **Issuer**:`https://YOUR_TENANT.auth0.com/`
-- **角色 / 權限**預設**不在** `realm_access`(那是 [Keycloak](#realm-access)),而是:
-  - **Permissions** in `permissions` array(需在 Dashboard 開 API 的 RBAC + Add Permissions to Access Token)
-  - **Custom claims** 透過 Actions 加,**必須用 namespaced URL**(`https://example.com/roles`)避免與 OIDC 標準 claim 衝突——這是 OIDC spec 要求
-- **跨平台對接時這是和 [Keycloak Realm Access](#realm-access) 並列的主要踩坑點**
+| Entra ID 概念 | 對應 Keycloak | 說明 |
+| --- | --- | --- |
+| **Tenant**(租戶) | Realm | 一個組織一個 Tenant,以網域識別(例 `contoso.onmicrosoft.com`) |
+| **App Registration** | Client | 接入 Entra 的應用,設定 redirect URI / scopes / 憑證 |
+| **Service Principal** | (無對應) | App 在某 Tenant 的執行身份實例(同一 App Registration 可在多租戶都有 SP) |
+| **Enterprise Application** | (無對應) | Tenant 端對 SaaS App 的安裝紀錄(SCIM provisioning、SSO 設定) |
+| **App Roles** | Client Role | App Registration 定義的角色,JWT 中放在 `roles` claim |
+| **Groups** | Group | 使用者群組,JWT 中放在 `groups` claim(**值是 GUID,不是名稱**) |
+| **Conditional Access** | (無對應) | 動態存取政策(位置 / 裝置合規 / MFA 風險) |
 
-**Spring Boot 整合**(Resource Server):
+**地端與雲端整合**:
+- **Entra Connect Sync**(舊名 Azure AD Connect)— 將本地 AD 同步到雲端 Entra ID,**Hash Sync / Pass-through Authentication / Federation(ADFS)** 三種模式
+- **Cloud Sync**(新一代,輕量 agent,逐步取代 Connect Sync)
+
+**協定支援**:
+- **OIDC / OAuth 2.0**(主流,新應用首選)
+- **SAML 2.0**(舊系統、企業 SSO 對接)
+- **WS-Federation**(極舊,逐步淘汰)
+- **SCIM 2.0**(自動使用者佈建)
+
+**Spring Boot 整合**(走 OIDC):
+
 ```yaml
 spring:
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://your-tenant.auth0.com/
-          # 自動抓 JWKS,與 Keycloak 用法一致
-          audiences: https://api.example.com
-          # 必須驗 aud,Auth0 預設 aud 是 Dashboard 設的 API identifier
+          issuer-uri: https://login.microsoftonline.com/${TENANT_ID}/v2.0
+          # JWKS 端點 Spring 自動發現:
+          # https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys
 ```
 
-**SPA 整合**(`@auth0/auth0-spa-js`):前端用 [PKCE](#pkce) + silent renew,token 放 memory(**不放 localStorage**,防 XSS)。
+**Microsoft 官方 Java SDK**:
+- **MSAL4J**(Microsoft Authentication Library for Java)— 處理 OAuth 互動式登入、token 取得與快取
+- **Microsoft Graph SDK for Java**— 查詢 Entra 中的 User / Group / Application 物件
 
-**對照 Keycloak / Okta / Cognito / Firebase**:
+**Java Web 應用 OAuth 流程範例**(MSAL4J client credentials):
 
-| 產品 | 定位 | 適合 |
+```java
+ConfidentialClientApplication app = ConfidentialClientApplication.builder(
+        env("AZURE_CLIENT_ID"),
+        ClientCredentialFactory.createFromSecret(env("AZURE_CLIENT_SECRET")))
+    .authority("https://login.microsoftonline.com/" + env("AZURE_TENANT_ID"))
+    .build();
+
+IAuthenticationResult result = app.acquireToken(
+    ClientCredentialParameters.builder(Set.of("https://graph.microsoft.com/.default")).build()
+).get();
+```
+
+**Entra ID JWT Payload 範例**(注意角色 claim 路徑與 Keycloak 不同):
+
+```json
+{
+  "aud": "api://order-service",
+  "iss": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+  "sub": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+  "oid": "user-object-id-guid",
+  "preferred_username": "alice@contoso.com",
+  "roles": ["order.read", "order.write"],            // ← App Roles(對應 Keycloak resource_access)
+  "groups": ["11111111-...", "22222222-..."],        // ← Group ID,不是名稱
+  "scp": "User.Read",                                 // ← Delegated 場景才有 scp(scope)
+  "ver": "2.0"                                        // ← Token version
+}
+```
+
+**常見坑**:
+- **Token v1 vs v2**:Endpoint `oauth2/v2.0/...` 與 `oauth2/...` 發出的 token 結構不同——`roles` claim 只在 **v2 token** 才有,務必 issuer URI 用 `/v2.0`
+- **`groups` claim 是 GUID 不是名稱**:後端要做 group → 角色對應,通常在 App Registration 開啟「Group claims」並選擇是否帶 SAM accountName(預設不帶)
+- **大量 Group 會被截斷**:使用者 >150 個 group 時 token 不會塞 `groups` 而是給 `_claim_names` + Graph API endpoint,Server 要回頭查 Graph
+- **多租戶 App(`multi-tenant`)**:issuer URI 用 `common` / `organizations` / `<tenant-id>`,JWT 驗證需動態取得正確 tenant 的 JWKS
+- **App Role vs Delegated Permission(scope)**:App Role 用在「應用呼應用」(client credentials)或「使用者登入後的權限」;Scope 用在「使用者授權 App 代表自己」(delegated)
+
+**Entra ID vs Keycloak vs Auth0**:
+
+| | Entra ID | Keycloak | Auth0 |
+| --- | --- | --- | --- |
+| 部署 | SaaS | 自架(可 SaaS:Red Hat SSO) | SaaS |
+| 計費 | 含於 M365 / 額外授權 | 開源免費 | 按 MAU 計費 |
+| 強項 | Microsoft 生態、企業客戶 SSO | 自有可控、Quarkus 整合 | Developer 體驗、Custom Login 流程 |
+| 適合 | 已用 M365 / Azure 的企業 | 內部系統、想自己掌控資料 | B2C App、需要快速接 social login |
+
+**相關連結**:[AD](#ad)、[OAuth 2.0 / OIDC](#oauth-oidc)、[SSO](#sso)、[Keycloak](#keycloak)
+
+---
+
+<a id="auth0"></a>
+### Auth0(SaaS 身份平台)🟡
+
+**定義**:**Identity-as-a-Service(IDaaS)**的代表產品,提供完整的 Auth / SSO / Social Login / MFA / 使用者管理,**developer-first** 是其招牌定位。**2021 年被 Okta 以 65 億美元收購**,目前 Auth0 與 Okta 是同一公司下的**兩條獨立產品線**——Okta 偏企業 IT 導向(Workforce Identity),Auth0 偏應用開發者(Customer Identity / CIAM)。
+
+**為什麼選 Auth0**:
+- 不想自架 Keycloak、也不在 Microsoft 生態
+- 需要快速接 Social Login(Google / Facebook / Apple / GitHub / LINE)
+- **Universal Login** 可客製登入頁面而不必自己重做 OAuth flow
+- B2C 應用(電商、行動 App)、SaaS 對接外部開發者(Developer Portal)
+
+**核心概念**:
+
+| Auth0 概念 | 對應 Keycloak | 說明 |
 | --- | --- | --- |
-| **Auth0** | DX 友善的 IDaaS,B2C 開發者首選 | SPA / Mobile / B2C |
-| **Okta**(母公司) | 企業級 IAM | B2B SSO、員工 IT(Office 365 / Salesforce 整合) |
-| **Keycloak** | 自架 OSS IAM | 在地化、資料敏感、預算限制 |
-| **AWS Cognito** | AWS-native | 已在 AWS 生態 |
-| **Firebase Authentication** | Google 生態 | Mobile-first、整合 Firestore / FCM |
+| **Tenant** | Realm | 一個 Tenant 一個獨立網域(`<tenant>.auth0.com`) |
+| **Application** | Client | 接入 Auth0 的 App(SPA / Native / Regular Web / M2M) |
+| **API** | Resource Server | 受保護的後端 API,定義 scope / permission |
+| **Connection** | User Federation / Identity Provider | 使用者來源:Database / Social / Enterprise(SAML / LDAP / AD) |
+| **Rules**(deprecated) / **Actions** | Authenticator SPI | 登入流程中插入自訂邏輯(MFA、加 custom claim、阻擋) |
+| **Hooks**(deprecated) | — | 舊版 webhook,已被 Actions 取代 |
+| **Organization** | Group / Sub-Realm | B2B 多租戶情境,把使用者按客戶組織分組 |
 
-**現況**:
-- **2021 被 Okta 收購**(US$ 6.5B),仍以獨立品牌運營
-- Auth0 + Okta 合併讓他們從「B2C 開發者首選」延伸到企業 IAM 市場
-- 與 Keycloak 在 OIDC / SAML 上**完全相容**(都是 spec compliant),從 Keycloak 遷移 Auth0 通常只改 `issuer-uri` 與 role claim 路徑
+**Rules vs Actions(重要遷移)**:
+- **Rules**:JavaScript 寫在 Auth0 dashboard,**已 deprecated**(2024 年 EOL)
+- **Actions**:取代 Rules,改用 Node.js + 明確的 Trigger(`post-login`、`credentials-exchange` 等)、可版本控制、可在 Marketplace 分享
+
+**協定支援**:
+- **OIDC / OAuth 2.0**(主)
+- **SAML 2.0**(SP / IdP 雙向皆支援)
+- **WS-Federation**(舊系統對接)
+
+**Spring Boot 整合**(走 OIDC,跟 Keycloak 寫法一致):
+
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://${AUTH0_TENANT}.auth0.com/
+          # JWKS 自動發現:https://<tenant>.auth0.com/.well-known/jwks.json
+          audiences: https://api.your-app.com   # 必設,Auth0 token 必有 aud
+```
+
+**Auth0 自家 Java SDK**:
+- **`com.auth0:java-jwt`**— JWT 解析與驗章 library(D1 [JWS 段](#jws)已提及,並非 Auth0 專用,Spring/Quarkus 也常用)
+- **`com.auth0:auth0-java`**— Management API 客戶端(查使用者、改 metadata)
+- **`com.auth0:mvc-auth-commons`**— Servlet 整合,適合不用 Spring Security 的場景
+
+**Auth0 JWT Payload 範例**(注意 Custom Claim namespace 規則):
+
+```json
+{
+  "iss": "https://your-tenant.auth0.com/",
+  "sub": "auth0|65f8a...",
+  "aud": ["https://api.your-app.com", "https://your-tenant.auth0.com/userinfo"],
+  "iat": 1735689600,
+  "exp": 1735693200,
+  "scope": "read:orders write:orders",
+  "permissions": ["order:read", "order:write"],         // ← RBAC 開啟後才有
+  "https://your-app.com/roles": ["admin", "vip"],       // ← Custom Claim 必須有 https:// namespace
+  "https://your-app.com/tenant_id": "tenant-abc"
+}
+```
+
+**Custom Claim 規則(易踩坑)**:
+- **必須加 namespace**(`https://your-domain/...`)否則 Auth0 會把非保留 claim 丟掉
+- **不要用 `auth0.com` 為前綴**(被視為保留)
+- 規則來源:OIDC spec 規範哪些 claim 是保留,其餘自訂 claim 必須以 URI 形式避免衝突
+
+**Action 範例**(`post-login` trigger,加 custom claim):
+
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  const namespace = 'https://your-app.com';
+  if (event.authorization) {
+    api.idToken.setCustomClaim(`${namespace}/roles`, event.authorization.roles);
+    api.accessToken.setCustomClaim(`${namespace}/tenant_id`,
+      event.user.app_metadata.tenant_id);
+  }
+};
+```
+
+**常見坑**:
+- **Free tier MAU 上限**:7,500 MAU(2026 年數字,可能變動);超過會強制升級
+- **`aud` claim 必填**:申請 token 時 `audience` 參數沒帶,Auth0 會發出**只能呼叫 `/userinfo` 的 opaque token**,不是 JWT — Spring 驗章會直接失敗
+- **`scope` vs `permissions`**:Application 設定有勾選「Enable RBAC + Add Permissions in the Access Token」才會有 `permissions` claim
+- **Custom Claim 沒 namespace** → 被丟掉,App 拿不到
+- **Rules 不要再寫新的**(已 deprecated),全部用 Actions
+
+**Auth0 vs Keycloak vs Entra ID**:已在 [Entra ID 條目](#entra-id)末段對照表呈現。
+
+**相關連結**:[OAuth 2.0 / OIDC](#oauth-oidc)、[JWT](#jwt)、[Keycloak](#keycloak)、[Entra ID](#entra-id)
 
 ---
 

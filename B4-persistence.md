@@ -862,7 +862,9 @@ sequenceDiagram
 
 #### 兩種風格:Choreography vs Orchestration
 
-| 維度 | Choreography(編舞) | Orchestration(指揮) |
+> 名稱借自表演藝術:**Orchestration** 像管弦樂團有**指揮**(中央 orchestrator 發號施令、逐步呼叫各服務);**Choreography** 像舞者照**編舞**各自走位(沒有指揮,服務靠彼此的事件互相配合)。下表括號內同時標註「比喻譯名 / 描述譯名」。
+
+| 維度 | Choreography(編舞 / 協同式) | Orchestration(指揮 / 編排式) |
 | --- | --- | --- |
 | 控制方式 | 服務間靠**事件**互相觸發,無中央協調者 | 中央 **Orchestrator** 逐步呼叫各服務 |
 | 流程可見性 | 分散、難追蹤(流程藏在事件鏈裡) | 集中、易監控與除錯 |

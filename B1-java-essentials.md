@@ -35,6 +35,9 @@
 - [Checked vs Unchecked Exception 🟢](#checked-unchecked)
 - [try-with-resources 🟢](#try-with-resources)
 
+### 記憶體管理
+- [Memory Leak(記憶體洩漏)🔴](#memory-leak)
+
 ### 其他常見
 - [Annotation Processor 🔴](#annotation-processor)
 - [Reflection 🟡](#reflection)
@@ -725,6 +728,76 @@ String d = c.intern();        // d 重新指回 pool,a == d 為 true
 - **Build pipeline 有 native build 步驟時**,build time 會大幅拉長(數分鐘),CI 機器規格要拉高
 
 **對 Quarkus 細節**:詳見 `B7-quarkus.md` 的「GraalVM / Native Image」章節。
+
+---
+
+## 記憶體管理
+
+<a id="memory-leak"></a>
+### Memory Leak(記憶體洩漏)🔴
+
+**定義**:物件**已經不再被使用**,卻仍從 **GC Root 可達**(reachable),導致 GC 無法回收、heap 持續成長,最終 `OutOfMemoryError`。和 C / C++「忘記 `free()`」不同——Java 有 GC,leak 的本質是**非預期的引用殘留**(unintentional retention):你以為不用了,但引用鏈還在。
+
+**為什麼有 GC 還會 leak**:GC 只回收「**不可達**」的物件。只要還有**一條**從 GC Root 連到物件的引用鏈,GC 就認定它「還在用」而不回收。
+
+```mermaid
+flowchart LR
+    R[GC Root<br/>static 欄位 / thread stack / JNI] --> A[物件 A]
+    A --> B[物件 B<br/>你以為已不用]
+    B -. 仍可達,GC 不回收 .-> Leak[記憶體洩漏]
+```
+
+**GC Root 有哪些**:活躍 thread 的 stack 區域變數與參數、`static` 欄位、JNI 全域引用、正在同步的鎖物件等。
+
+**常見 Java 洩漏來源**:
+
+| 來源 | 說明 | 對策 |
+| --- | --- | --- |
+| **`static` 集合無限長大** | `static Map` / `List` 當快取又不清,放進去就回不來 | 改用有 eviction 的快取(Caffeine / Guava)或 `WeakHashMap` |
+| **未關閉資源** | `Connection` / `InputStream` / `Reader` 沒關 | [try-with-resources](#try-with-resources) |
+| **`ThreadLocal` 未 `remove()`** | thread pool **重用 thread**,值殘留下一個任務,還可能拖住 ClassLoader | `finally { tl.remove(); }` |
+| **監聽器 / callback 未反註冊** | `register` 了卻沒 `unregister`,被事件源永久引用 | register / unregister 成對出現 |
+| **ClassLoader Leak** | Web App redeploy,舊 ClassLoader 被 `static` 引用卡住 → **Metaspace** 洩漏 | 詳見 [ClassLoader](#classloader);避免框架 / 函式庫持有 app class 的 static 引用 |
+| **內部類 / lambda 隱式持有外層** | 非 static 內部類隱含 `Outer.this` 引用 | 改 `static` 巢狀類 / 只捕捉需要的欄位 |
+| **壞掉的 `equals` / `hashCode`** | 物件放進 `HashSet` / `HashMap` 後算不出原 bucket,`remove()` 失效 | 遵守 [`equals` / `hashCode` 契約](#equals-hashcode) |
+
+**症狀與診斷**:
+- 症狀:heap 用量**階梯式持續上升**、Full GC 變頻繁卻回收不掉,最終 `OutOfMemoryError: Java heap space`(或 `Metaspace`)。
+- 抓現場:`-XX:+HeapDumpOnOutOfMemoryError` 自動 dump,或 `jmap -dump:live,format=b,file=heap.hprof <pid>`。
+- 分析:**Eclipse MAT**(看 Dominator Tree 找最大佔用、Path to GC Roots 找誰拽著它不放)、VisualVM / JProfiler。
+- 監控:`jstat -gcutil`、Micrometer JVM metrics 上 Prometheus / Grafana(見 [E1 Observability](./E1-deployment-cicd.md))。
+
+**反例與正解**:
+```java
+// 反例 1:static 集合無限長大,且缺 unregister → listener 永遠被引用
+public class EventBus {
+    private static final List<Listener> LISTENERS = new ArrayList<>();
+    public static void register(Listener l) { LISTENERS.add(l); }
+    // 缺 unregister → leak
+}
+
+// 反例 2:thread pool 重用 thread,ThreadLocal 沒清 → 值殘留 + 可能拖住 ClassLoader
+private static final ThreadLocal<BigContext> CTX = new ThreadLocal<>();
+void handle() {
+    CTX.set(new BigContext());
+    try {
+        // ... 業務邏輯
+    } finally {
+        CTX.remove();          // ✅ 一定要清,尤其在 thread pool
+    }
+}
+```
+
+**預防清單**:
+- 集合型快取一律設**上限 / TTL**(Caffeine、Guava `CacheBuilder`),或用 `WeakHashMap`。
+- 資源走 [try-with-resources](#try-with-resources);`ThreadLocal` 用完 `remove()`。
+- 需要「GC 可回收的引用」時用 `WeakReference` / `SoftReference`。
+- 上線前壓測 + 開 `HeapDumpOnOutOfMemoryError` + heap 監控告警。
+
+**容易混淆的概念**:
+- **Memory Leak vs OOM**:leak 是**原因**,`OutOfMemoryError` 是**症狀之一**;但 OOM 也可能只是 heap 配太小、或一次載入過大資料,未必是 leak。
+- **不是只有 heap 會漏**:Metaspace(ClassLoader leak)、Direct / off-heap `ByteBuffer`、執行緒洩漏(thread leak,只建不關)都算。
+- **前端 JS 也有 memory leak**:閉包持有 DOM、event listener 未移除、`setInterval` 未 `clearInterval`、`URL.createObjectURL` 未 `revokeObjectURL`——詳見 [C2 前端框架](./C2-frontend-framework.md)、[C3 瀏覽器 / Web API](./C3-browser-web-api.md)。
 
 ---
 

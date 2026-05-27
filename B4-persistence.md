@@ -37,7 +37,7 @@
 
 ### 進階模式
 - [Outbox Pattern 🔴](#outbox)
-- [SAGA 🔴](#saga)
+- [Saga Pattern(跨系統 Rollback)🔴](#saga)
 - [CQRS 🔴](#cqrs)
 - [Event Sourcing 🔴](#event-sourcing)
 
@@ -841,17 +841,164 @@ sequenceDiagram
 ---
 
 <a id="saga"></a>
-### SAGA 🔴
+### Saga Pattern(跨系統 Rollback)🔴
 
-**定義**:跨多個服務的**長交易**——當分散式系統做不到 ACID,改用「一系列本地交易 + 失敗時的補償操作」。
+**定義**:跨多個服務的**長交易**(long-lived transaction)——當分散式系統做不到單一 ACID 交易,改用「**一系列本地交易 + 失敗時的補償操作(Compensating Transaction)**」來達成**最終一致性**(eventual consistency)。
 
-**兩種風格**:
-- **Choreography(編舞)**:服務之間透過事件互相觸發,無中央協調者
-- **Orchestration(指揮)**:中央 Orchestrator 控制每一步
+**核心問題**:微服務各自擁有自己的 DB(Database per Service),一筆業務(下單 → 扣庫存 → 扣款)橫跨多個服務,**無法用單一 `@Transactional` 包起來**。傳統 2PC / XA 雖能保證強一致,但會長時間鎖資源、協調者是單點、可用性差,在微服務規模下難以接受。
 
-**範例**:訂單流程
-1. 建單(成功) → 2. 扣庫存(成功) → 3. 扣款(失敗)
-   → 補償:退庫存 → 取消訂單
+**Saga 的取捨**:用「**補償**」換「**可用性**」——放棄即時原子性,接受**中間狀態短暫可見**,失敗時用反向業務操作把已完成的步驟「語意上回滾」。
+
+#### 跨系統 Rollback 的本質:補償交易,不是真的 ROLLBACK
+
+| 面向 | 單機交易 ROLLBACK | Saga 補償(Compensating Transaction) |
+| --- | --- | --- |
+| 機制 | DB 引擎丟棄未 commit 的變更 | **執行一筆新的反向業務交易** |
+| 時間點 | commit 之前 | 每一步都**已經 commit**,事後補救 |
+| 痕跡 | 像沒發生過 | 留下軌跡(扣款 + 退款兩筆紀錄) |
+| 範例 | `ROLLBACK;` | 扣款 → **退款**;扣庫存 → **回補庫存**;發貨 → **召回 / 退貨** |
+
+**關鍵認知**:有些操作**根本無法補償**(寄出的 email、已撥付的款項、已出貨的實體商品)。設計時要把**不可逆步驟盡量往後排**,放在所有可補償步驟之後——這個分界點稱為 **Pivot Transaction(樞紐交易)**:pivot 之前全可補償,pivot 之後只能往前重試直到成功。
+
+#### 兩種風格:Choreography vs Orchestration
+
+| 維度 | Choreography(編舞) | Orchestration(指揮) |
+| --- | --- | --- |
+| 控制方式 | 服務間靠**事件**互相觸發,無中央協調者 | 中央 **Orchestrator** 逐步呼叫各服務 |
+| 流程可見性 | 分散、難追蹤(流程藏在事件鏈裡) | 集中、易監控與除錯 |
+| 耦合 | 低(各服務只認事件) | 中(Orchestrator 認得所有服務) |
+| 風險 | 事件鏈循環依賴、難掌握全局 | Orchestrator 成為複雜度與單點集中處 |
+| 適合 | 步驟少(2~4)、團隊各自自治 | 步驟多、流程複雜、需嚴格監控 |
+
+```mermaid
+flowchart LR
+    subgraph chor["Choreography(事件驅動)"]
+        A1[訂單服務<br/>發 OrderCreated] -->|事件| B1[庫存服務<br/>發 StockReserved]
+        B1 -->|事件| C1[支付服務<br/>PaymentFailed]
+        C1 -.補償事件.-> B2[庫存服務<br/>回補]
+        B2 -.補償事件.-> A2[訂單服務<br/>取消]
+    end
+```
+
+```mermaid
+flowchart LR
+    subgraph orch["Orchestration(中央協調)"]
+        O{Orchestrator} --> S1[訂單服務]
+        O --> S2[庫存服務]
+        O --> S3[支付服務]
+        S3 -.失敗.-> O
+        O -.補償.-> S2
+        O -.補償.-> S1
+    end
+```
+
+#### 範例:訂單流程(Orchestration,扣款失敗觸發補償)
+
+```mermaid
+sequenceDiagram
+    participant O as Saga Orchestrator
+    participant Order as 訂單服務
+    participant Stock as 庫存服務
+    participant Pay as 支付服務
+
+    O->>Order: T1 建立訂單(PENDING)
+    Order-->>O: OK
+    O->>Stock: T2 扣庫存
+    Stock-->>O: OK
+    O->>Pay: T3 扣款
+    Pay-->>O: 失敗(餘額不足)
+    Note over O: 進入補償流程,反向(LIFO)執行
+    O->>Stock: C2 回補庫存
+    Stock-->>O: OK
+    O->>Order: C1 取消訂單(CANCELLED)
+    Order-->>O: OK
+```
+
+**Orchestration 範例**(中央協調者,失敗則 LIFO 反向補償):
+```java
+@Service
+@RequiredArgsConstructor
+public class CreateOrderSaga {
+    private final OrderService order;
+    private final StockService stock;
+    private final PaymentService payment;
+
+    public void execute(OrderRequest req) {
+        // 用 stack 記錄「每個已完成步驟對應的補償動作」
+        Deque<Runnable> compensations = new ArrayDeque<>();
+        try {
+            OrderId id = order.create(req);                        // T1
+            compensations.push(() -> order.cancel(id));            // C1
+
+            stock.reserve(req.items());                            // T2
+            compensations.push(() -> stock.release(req.items()));  // C2
+
+            payment.charge(req.userId(), req.amount());            // T3(pivot)
+        } catch (Exception e) {
+            // 失敗:依 LIFO 反向執行補償(後完成的先回滾)
+            compensations.forEach(Runnable::run);
+            throw new SagaFailedException("下單失敗,已執行補償", e);
+        }
+    }
+}
+```
+
+**注意**:上例為**示意版**(補償狀態只活在記憶體)。正式環境必須把 Saga 狀態**持久化**(saga log / 狀態機),否則程序崩潰時補償會遺失;且補償需冪等、可重試。實務多用 Camunda / Temporal / Axon 等框架托管狀態與重試。
+
+#### 補償交易的設計守則
+
+- **冪等(idempotent)**:補償可能因重試被執行多次,結果須一致——詳見 [B6 Idempotency](./B6-resilience.md#idempotency)。
+- **補償也會失敗**:需 retry + backoff,最終失敗要進 dead letter / 告警,留人工介入。
+- **不可逆步驟往後排**:把撥款、發貨、寄信等無法補償的動作放在 pivot 之後。
+- **正向與補償一樣要測試**:補償邏輯沒被測過,等於沒有 rollback。
+
+#### Saga 缺乏隔離性(ACD without I)
+
+本地交易有 ACID,但 Saga 整體**只保證 A、C、D,沒有 I(Isolation)**——步驟間的中間狀態會被其他交易看見,可能造成**髒讀 / 更新遺失**。常見對策(來自 Chris Richardson《Microservices Patterns》):
+
+| 對策 | 說明 |
+| --- | --- |
+| **Semantic Lock**(語意鎖) | 在 Saga 進行中把資料標記為 `PENDING`,其他交易看到就等待或拒絕 |
+| **Commutative Updates**(可交換更新) | 設計成「加減」而非「設定絕對值」,順序顛倒結果仍正確 |
+| **Pessimistic View** | 調整步驟順序,降低髒讀的業務風險 |
+| **Reread Value** | 更新前重讀並比對版本,變了就中止(類似樂觀鎖) |
+| **By Value** | 依風險高低動態選擇:低風險走 Saga,高風險改用分散式鎖 / 同庫交易 |
+
+#### Saga vs 2PC(XA)vs TCC 對照
+
+| 維度 | 2PC / XA | TCC(Try-Confirm-Cancel) | Saga |
+| --- | --- | --- | --- |
+| 一致性 | 強一致(ACID) | 較強(資源預留) | **最終一致** |
+| 鎖定 | 長時間鎖資源、阻塞 | 短(Try 階段預留) | 不鎖,各本地交易立即 commit |
+| 隔離性 | 有 | 部分(預留) | **無**(需自行補) |
+| 協調者 | 必須(SPOF 風險) | 應用層自管 | Orchestration 需要 / Choreography 不需 |
+| 侵入性 | 低(DB / MQ 原生支援) | **高**(每服務要寫 Try/Confirm/Cancel 三方法) | 中(每步要寫補償) |
+| 適用 | 同公司、節點少、可接受阻塞 | 金流等需較強一致的短交易 | 微服務、長流程、可接受最終一致 |
+
+#### 與相關模式的關係
+
+- **[Outbox Pattern](#outbox)**:Choreography Saga 靠事件串接,而「寫 DB + 發事件」必須原子——Outbox 正是保證事件可靠送出的標配。
+- **[Event Sourcing](#event-sourcing)**:事件流天然適合驅動 Choreography Saga。
+- **狀態機 / 流程引擎**:Orchestration Saga 本質是一台狀態機,常用 BPMN(Camunda / Zeebe)或 Temporal 表達。
+
+#### 實作工具
+
+- **Orchestration**:Camunda / Zeebe(BPMN)、Temporal、AWS Step Functions、Axon Framework、Eventuate Tram Sagas、Spring Statemachine
+- **Choreography**:Kafka / RabbitMQ + [Outbox Pattern](#outbox) + Idempotent Consumer
+
+#### 反模式
+
+- ❌ 把 Saga 當**同步 RPC chain**(一個服務同步呼叫下一個、又沒寫補償)——失去解耦與韌性,變成「分散式單體」
+- ❌ 補償交易**不冪等**,或沒考慮「補償本身也會失敗」
+- ❌ 忽略隔離性,中間狀態被別的交易讀到造成業務錯誤
+- ❌ **單體應用硬上 Saga**——同進程同 DB 用本地 `@Transactional` 就好,別自找麻煩
+- ✅ 不可逆步驟(撥款、發貨、寄信)一律排在 pivot 之後
+- ✅ Saga 狀態持久化,崩潰可續跑;補償有 retry 與告警
+
+#### 何時用 / 何時不用
+
+- **用**:跨多個自治服務或外部系統的長流程、可接受最終一致與中間狀態短暫可見、步驟大多可補償。
+- **不用**:同一服務同一 DB(本地交易即可)、需即時強一致(如金融核心帳務瞬時餘額,考慮 TCC 或同庫交易)、流程極短且節點少又可接受阻塞(2PC 也許更簡單)。
 
 ---
 

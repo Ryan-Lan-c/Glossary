@@ -283,9 +283,39 @@ public class PaymentService {
 <a id="smallrye"></a>
 ### SmallRye 🟡
 
-**定義**:Red Hat 主導的 **MicroProfile 開源實作集合**——所有 `smallrye-*` extension 都來自此專案。Quarkus 的 MicroProfile 整合**幾乎等於 SmallRye**。
+**定義**:Red Hat 主導的開源專案集合,提供 **MicroProfile 規範的實作**,以及一系列**反應式 / 雲原生基礎元件**。Quarkus 所有 `smallrye-*` extension 都源自此專案——可以說 **Quarkus 的 MicroProfile 整合幾乎等於 SmallRye**。
 
-不需要記細節,看到 `smallrye-jwt` 就理解為「Quarkus 提供的 MicroProfile JWT 實作」即可。
+**三者關係(規範 → 實作 → 打包)**:
+```
+MicroProfile   規範 / spec(由 Eclipse Foundation 制定)
+      │ 實作
+SmallRye       Red Hat 的開源實作
+      │ 打包成 extension
+Quarkus        quarkus-smallrye-* / 部分內建
+```
+> 同一份 SmallRye 實作也被 **WildFly、Open Liberty** 等 Jakarta EE 伺服器採用——並非 Quarkus 專屬,只是 Quarkus 用得最深、整進 build-time 流程。
+
+**為什麼要知道它**:看到 `smallrye-` 開頭的 extension 或套件名,就知道「這是某個 MicroProfile(或反應式)規範的實作」,不必把它當成陌生的新框架。
+
+**SmallRye 旗下主要專案**:
+
+| SmallRye 專案 / extension | 對應規範 | 詳述位置(canonical home) |
+| --- | --- | --- |
+| `smallrye-fault-tolerance` | MP Fault Tolerance | [B6 MicroProfile Fault Tolerance](./B6-resilience.md#mp-fault-tolerance) |
+| `smallrye-jwt` | MP JWT | [D1 JWT](./D1-security-jwt.md#jwt) |
+| `smallrye-reactive-messaging` | (非 MP)反應式訊息 | [B5 Kafka](./B5-integration-messaging.md#kafka) |
+| **SmallRye Mutiny** | (非 MP)反應式程式庫 | 本篇 [Mutiny](#mutiny) |
+| `smallrye-config` | MP Config(再擴充為超集) | 本篇 [配置來源優先順序](#config-source) |
+| `smallrye-health` | MP Health | 本篇 [MicroProfile](#microprofile) 表 |
+| `smallrye-openapi` | MP OpenAPI | 本篇 [MicroProfile](#microprofile) 表 |
+| `smallrye-rest-client` | MP REST Client | 本篇 [MicroProfile](#microprofile) 表 |
+| `smallrye-metrics` | MP Metrics(已被 Micrometer 取代) | 本篇 [MicroProfile](#microprofile) 表 |
+| `smallrye-graphql` | MP GraphQL | — |
+| **SmallRye Stork** | (非 MP)服務發現 / 客戶端負載平衡 | — |
+
+> **超出 MicroProfile 的部分**:SmallRye 不只實作 MP。**Mutiny**(Quarkus 的反應式核心)、**Reactive Messaging**(Kafka / AMQP 的宣告式整合)、**Stork**(服務發現)、以及把 MP Config 擴充成 Quarkus 配置引擎的 **SmallRye Config**,都是 SmallRye 自己的元件,並非 MicroProfile 規範。
+
+**一句話原則**:不需要背 SmallRye 的內部細節——看到 `smallrye-jwt` 就理解為「Quarkus 提供的 MicroProfile JWT 實作」,需要細節時再跳到對應的 canonical home 即可。
 
 ---
 

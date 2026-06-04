@@ -29,6 +29,7 @@ Java 工程師雖然不直接配置網路設備,但**部署、跨機房連線、
 - [HTTP Status Codes 🟢](#http-status)
 - [RPC(Remote Procedure Call)🟡](#rpc)
 - [RESTful API 🟡](#restful)
+  - [HATEOAS 🔴](#hateoas)
 - [WebSocket 🟡](#websocket)
 - [TLS / mTLS 🟡](#tls-mtls)
 
@@ -413,6 +414,40 @@ User u = stub.getUser(GetUserRequest.newBuilder().setId(123).build());
 - 多數「RESTful API」其實只到 **Level 2**(基本 HTTP 動詞 + URL 設計),L3 HATEOAS 罕見
 - 「**REST-ish**」一詞代表「不嚴格按 Fielding 原文,但精神到位」
 - 真要嚴格 RESTful,得不償失;**滿足 L2 + 一致命名 + 合理狀態碼** 已是良好設計
+
+<a id="hateoas"></a>
+#### HATEOAS(Hypermedia As The Engine Of Application State,超媒體作為應用狀態引擎)🔴
+
+**定義**:Richardson L3 的核心——response 不只回資料,還回**當前狀態下「下一步能做什麼」的超連結**。client 不硬編 URL,而是**跟著 server 回傳的連結走**(像瀏覽器跟著網頁的 `<a>` 連結),URL 結構與狀態轉移由 server 主導。
+
+**為什麼(理論上)用**:
+- **解耦 client / server**:URL 改版時 client 不必同步改,路徑都從 response 連結拿
+- **可發現性**:client 不必事先讀完整份 API 文件,順著連結就能探索可用操作
+- **狀態驅動**:依資源**當前狀態**動態決定可用動作(訂單 `PAID` 才出現 `cancel` 連結)
+
+**範例**(常見格式 HAL,以 `_links` 表達):
+
+```json
+{
+  "id": 123,
+  "status": "PAID",
+  "_links": {
+    "self":   { "href": "/orders/123" },
+    "cancel": { "href": "/orders/123/cancel" },
+    "items":  { "href": "/orders/123/items" }
+  }
+}
+```
+
+> 狀態若是 `SHIPPED`,server 就不回 `cancel` 連結 → client 自然知道不能取消。
+
+**反例 / 為什麼罕見**:
+- client 端**硬編 URL**(直接打 `POST /orders/123/cancel`)、完全不看 `_links` → 退回 L2,HATEOAS 形同虛設
+- 多數 client(尤其前端 / mobile)就是照文件硬編,動態跟連結走的成本高、收益低
+- 格式分裂(HAL / JSON:API / Siren / Collection+JSON 各搞各的),缺乏統一標準
+- 結論:**理論優雅、實務罕見**;Spring HATEOAS 等框架雖支援,落地專案少
+
+**常見誤解**:HATEOAS **不是**「RESTful 3.0」之後才有的新功能——它是 Roy Fielding **2000 年原始 REST 約束**的一部分(屬 Uniform Interface 底下的「hypermedia as the engine of application state」),Fielding 本人甚至主張**沒做到 HATEOAS 就不算真 REST**。你看到的「3」是 Richardson **Level 3**,那是「**成熟度等級**」而非「**版本號**」;REST 是架構風格、**沒有官方 1.0 / 2.0 / 3.0 版本**。成熟度等級高 ≠ 出現時間晚。
 
 **與其他 API 風格對照**:詳見 [RPC vs REST vs gRPC vs GraphQL 對照](#rpc)(主場在 [RPC](#rpc) 條目)。
 

@@ -62,22 +62,22 @@
 
 | # | 主題 | 內容摘要 |
 | --- | --- | --- |
-| D1 | [Security / JWT / OAuth](./D1-security-jwt.md) | JOSE 家族(JWT / JWS / JWE / JWK / JWA)、Stateless、Whitelist、AuthN vs AuthZ、ACL/RBAC/ABAC、OAuth 2.0 / OIDC、PKCE、SSO、SLO、SAML、LDAP、AD、Keycloak、Realm Access、Entra ID、Auth0、FIDO / WebAuthn / Passkey、Role SoT、Hash、Rainbow Table、Argon2id、AES-256、PKI、X.509、CRL / OCSP、Let's Encrypt、Defense in Depth |
-| D2 | [Web 攻擊防禦(CORS / CSRF / XSS)](./D2-web-security.md) | CORS、CSRF、XSS(Stored / Reflected / DOM-based)、CSP、`HttpOnly` Cookie、IDS / IPS |
+| D1 | [Security / JWT / OAuth](./D1-security-jwt.md) | JOSE 家族(JWT / JWS / JWE / JWK / JWA)、Stateless、Whitelist、AuthN vs AuthZ、ACL/RBAC/ABAC、OAuth 2.0 / OIDC、PKCE、SSO、SLO、SAML、LDAP、AD、Keycloak、Realm Access、Entra ID、Auth0、FIDO / WebAuthn / Passkey、Role SoT、Hash、Rainbow Table、Argon2id、AES-256、信封加密(DEK / KEK)、NIST、PKI、X.509、CRL / OCSP、Let's Encrypt、Defense in Depth |
+| D2 | [Web 攻擊防禦(CORS / CSRF / XSS)](./D2-web-security.md) | CORS、CSRF、XSS(Stored / Reflected / DOM-based)、IDOR、CSP、`HttpOnly` Cookie、IDS / IPS |
 | D3 | [網路術語](./D3-networking.md) | RFC、OSI 七層、TCP / UDP、HTTP / HTTPS、HTTP Status、RESTful API(含 HATEOAS)、WebSocket、TLS / mTLS、DNS、CDN、Load Balancer L4 vs L7、APISIX / Kong(API Gateway)、VPN、MPLS |
 
 ### E — 基礎建設與運維
 
 | # | 主題 | 內容摘要 |
 | --- | --- | --- |
-| E1 | [部署與 CI/CD](./E1-deployment-cicd.md) | CI / CD、Jenkins、Docker、Kubernetes、Helm、GitOps、12-Factor App、部署策略、Checkmarx / SonarQube / Snyk、Observability、logrotate、traceparent / x-request-id、Artifact Repository |
+| E1 | [部署與 CI/CD](./E1-deployment-cicd.md) | CI / CD、Jenkins、Docker、Kubernetes、Helm、HashiCorp Vault(機密管理)、GitOps、12-Factor App、部署策略、Checkmarx / SonarQube / Snyk、Observability、logrotate、traceparent / x-request-id、Artifact Repository |
 
 ### F — 資料 / 搜尋 / AI
 
 | # | 主題 | 內容摘要 |
 | --- | --- | --- |
 | F1 | [搜尋與文字處理](./F1-search-text.md) | 中文切詞(IK / jieba / HanLP)、TF-IDF / BM25 / Cosine、Word Embedding / Word2Vec / BERT、nd4j、kNN / Dense Vector、向量資料庫、Elasticsearch Analyzer / Custom Scoring、Microsoft Fabric |
-| F2 | [AI Agent 與 LLM 應用](./F2-ai-agent.md) | LLM / Token / Prompt / Context Window、TensorFlow / DL4J / ONNX / DJL、Tool Use、Hermes Agent、Browser Agent、MCP、Spring AI / LangChain4j、RAG、Fine-tuning vs RAG |
+| F2 | [AI Agent 與 LLM 應用](./F2-ai-agent.md) | LLM / Token / Prompt / Context Window、TensorFlow / DL4J / ONNX / DJL、Tool Use、Hermes Agent、Browser Agent、LSP、MCP、Spring AI / LangChain4j、RAG、Fine-tuning vs RAG |
 
 ### G — CS 基礎(資料結構與演算法)
 
@@ -152,6 +152,7 @@ flowchart LR
 
 | 版本 | 日期 | 變更摘要 |
 | --- | --- | --- |
+| **2.4.5** | **2026-06-05** | **D2 新增 IDOR 條目**(新增 `<a id="idor">`):OWASP A01 Broken Access Control 代表攻擊——只驗登入未驗物件擁有者、改 id 越權讀寫,補定義 / 為什麼危險 / 典型 id+1 場景 / Spring 擁有者比對與 `@PostAuthorize` 防禦 / 只驗登入的反例 / 防禦清單(物件層級授權、UUID 緩解不取代授權、多租戶 `tenant_id` 過濾),依主場原則連 [D1 ACL/RBAC/ABAC](./D1-security-jwt.md#rbac) / [Least Privilege](./D1-security-jwt.md#least-privilege);D2 目錄 + README D2 索引補 IDOR。<br>**D1 新增「信封加密(Envelope Encryption):DEK + KEK」條目**(新增 `<a id="envelope-encryption">`,接於 AES-256 後):DEK / KEK 兩層金鑰定義、為什麼分層(效能 / 輪替只 re-wrap / 隔離爆炸半徑 / 稽核)、AWS KMS `GenerateDataKey` 流程、反例,連 [AES-256](./D1-security-jwt.md#aes-256) 與 [B4 TDE](./B4-persistence.md#tde) 實例;**B4 TDE 金鑰階層補一句**指回此通用概念(主場在 D1,B4 不重寫);D1 目錄 + README D1 索引補「信封加密(DEK/KEK)」。<br>**E1 新增 HashiCorp Vault 條目**(新增 `<a id="vault">`,定為 canonical home):機密管理定位、動態機密、四大 Secrets Engine(KV / Dynamic / Transit / PKI)、與 K8s 整合、工具對照表;依單一主場原則,原散落 4 處改為「一句話 + 連結」回此處——[D1 KMS](./D1-security-jwt.md#aes-256) / [D1 PKI(Let's Encrypt)](./D1-security-jwt.md#lets-encrypt)、[D3 mTLS 憑證輪替](./D3-networking.md#tls-mtls)(2 處)、[B4 MySQL keyring](./B4-persistence.md#tde);E1 Secret 段 bullet 改連結、README E1 索引補「HashiCorp Vault(機密管理)」。<br>**F2 新增 LSP(Language Server Protocol)條目**(新增 `<a id="language-server-protocol">`,放 MCP 旁):編輯器 ↔ 語言智慧解耦、JSON-RPC、N×M → N+M、共用 language server,並與 [MCP](./F2-ai-agent.md#mcp) 類比互連;加與 [A1 Liskov(`#lsp`)](./A1-code-quality.md#lsp) 同縮寫的消歧註記;MCP 條目「LSP 之於 IDE」那句改為連結;F2 目錄 + README F2 索引補 LSP。<br>**D1 新增 NIST 條目**(新增 `<a id="nist">`,密碼學與雜湊區、接於信封加密後):最常引用出版品對照表(SP 800-63B 密碼規範 / FIPS 140 / FIPS 197・180-4 / 2024 PQC ML-KEM・ML-DSA / CSF / SP 800-53),與 OWASP、[RFC](./D3-networking.md#rfc) 定位對照,連 [密碼雜湊](./D1-security-jwt.md#password-hashing) / [AES-256](./D1-security-jwt.md#aes-256) / [Hash](./D1-security-jwt.md#hash);D1 目錄 + README D1 索引補 NIST。<br>**metrics / tracing 經查已收錄**於 [E1 Observability 三大支柱](./E1-deployment-cicd.md#three-pillars) 及 Prometheus / Jaeger・Zipkin / OpenTelemetry 專條,依單一主場原則不重複新增。 |
 | **2.4.4** | **2026-06-03** | **B7 SmallRye 條目從一句話骨架擴充為完整條目**:補「MicroProfile(規範)→ SmallRye(Red Hat 實作)→ Quarkus(extension)」三層關係圖、SmallRye 旗下主要專案總覽表(`smallrye-fault-tolerance` / `smallrye-jwt` / `smallrye-reactive-messaging` / Mutiny / `smallrye-config` / `smallrye-health` / `smallrye-openapi` / `smallrye-rest-client` / `smallrye-metrics` / `smallrye-graphql` / Stork)並標註各自 canonical home、「超出 MicroProfile 的部分」(Mutiny / Reactive Messaging / Stork / SmallRye Config)說明、WildFly / Open Liberty 也採用之註記;依主場原則連結 [B6 MP Fault Tolerance](./B6-resilience.md#mp-fault-tolerance) / [D1 JWT](./D1-security-jwt.md#jwt) / [B5 Kafka](./B5-integration-messaging.md#kafka) 與本篇 [Mutiny](./B7-quarkus.md#mutiny) / [配置來源](./B7-quarkus.md#config-source) / [MicroProfile](./B7-quarkus.md#microprofile);保留「一句話原則」。**README B7 摘要原已列 SmallRye,無需更動**。<br>**(本版併入,獨立主題)D3 RESTful API 條目補「HATEOAS 深入」子段**(新增 `<a id="hateoas">`):補全稱 Hypermedia As The Engine Of Application State、定義 / 為什麼用 / 為什麼罕見、HAL `_links` 範例與「client 硬編 URL」反例,並加「常見誤解」釐清——HATEOAS 是 Fielding 2000 原始 REST 約束、**非「RESTful 3.0」新功能**,Richardson L3 是**成熟度等級而非版本號**;D3 目錄補 HATEOAS 子項、README D3 索引「RESTful API」後補註「(含 HATEOAS)」 |
 | **2.4.3** | **2026-05-27** | **B4 Saga「兩種風格」可讀性修正**:補比喻來源說明(Orchestration = 管弦樂團有「指揮」/ Choreography = 舞者照「編舞」各自走位),對照表欄名補描述式譯名——Choreography(編舞 / 協同式)、Orchestration(指揮 / 編排式),避免冷讀時誤把「編舞 / 指揮」當一般溝通用語 |
 | **2.4.2** | **2026-05-27** | **B1 新增「記憶體管理」小節 — Memory Leak(記憶體洩漏)**:GC Root 可達性導致 leak 的本質、GC Root 範圍、常見來源對照表(static 集合 / 未關資源 / ThreadLocal 未 remove / 監聽器未反註冊 / ClassLoader leak / 內部類隱式持有 / 壞掉的 equals-hashCode)、症狀與診斷(HeapDumpOnOutOfMemoryError、jmap、Eclipse MAT Dominator Tree / Path to GC Roots、jstat、Micrometer)、反例與預防清單、Memory Leak vs OOM 釐清、heap 以外(Metaspace / off-heap / thread leak)與前端 JS leak;連結 [try-with-resources](./B1-java-essentials.md#try-with-resources) / [ClassLoader](./B1-java-essentials.md#classloader) / [equals-hashCode](./B1-java-essentials.md#equals-hashcode) / C2 / C3 / E1 Observability。**README B1 摘要補列 Memory Leak** |

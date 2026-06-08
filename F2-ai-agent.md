@@ -40,6 +40,7 @@
 - [Hermes Agent 🟡](#hermes-agent)
 - [Browser Agent(AI 驅動瀏覽器)🟡](#browser-agent)
 - [LangChain / LlamaIndex 🟡](#langchain)
+- [LSP(Language Server Protocol)🟡](#language-server-protocol)
 - [MCP(Model Context Protocol)🔴](#mcp)
 - [ACP(Agent Communication Protocol)🔴](#acp)
 
@@ -447,13 +448,35 @@ Final Answer: 您的訂單已出貨
 
 ---
 
+<a id="language-server-protocol"></a>
+### LSP(Language Server Protocol)🟡
+
+> ⚠ 別跟 [A1 SOLID 的 LSP(Liskov Substitution Principle,里氏替換)](./A1-code-quality.md#lsp) 搞混——同縮寫、完全不同概念。
+
+**定義**:Microsoft 2016 提出的協定,把「編輯器 / IDE」和「語言智慧」(autocomplete、go-to-definition、找引用、即時診斷、rename)**解耦**。編輯器當 client、語言端當 server(language server),兩者用 **JSON-RPC** 溝通(走 stdio / socket)。
+
+**為什麼重要(N×M → N+M)**:
+- 沒 LSP 前:N 個編輯器 × M 種語言 = **N×M** 份語言智慧實作
+- 有 LSP 後:一種語言只要寫**一個 language server**,所有支援 LSP 的編輯器都能用 → **N+M**
+- 所以今天 VS Code / Neovim / JetBrains 能共用同一個 `rust-analyzer`、`gopls`、`typescript-language-server`
+
+**範例(概念流)**:
+```
+編輯器(client) --textDocument/completion-->  Language Server
+編輯器(client) <--補全清單 / 診斷 / 定義位置--  Language Server
+```
+
+**和 MCP 的關係**:[MCP](#mcp) 之於 LLM Tool Use,正如 LSP 之於 IDE——同樣是「**一套標準協定取代 N×M 各自整合**」的思路,MCP 也走 JSON-RPC、也分 client / server。理解 LSP 就懂 MCP 的設計動機。
+
+---
+
 <a id="mcp"></a>
 ### MCP(Model Context Protocol)🔴
 
 **定義**:**Anthropic 在 2024-11 提出的 LLM 與工具 / 資料源之間的標準化協定**——把 Tool Use 從「每家 LLM 各搞一套」變成「**一套標準,任何 LLM 通用**」。
 
 **類比**:
-- **LSP**(Language Server Protocol)之於 IDE
+- **[LSP](#language-server-protocol)**(Language Server Protocol)之於 IDE
 - **OpenTelemetry** 之於觀測性
 - **MCP** 之於 LLM Tool Use
 

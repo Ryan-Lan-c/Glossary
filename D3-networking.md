@@ -600,7 +600,7 @@ sequenceDiagram
 **mTLS 與 PKI 的關係**(對應 [D1 PKI](./D1-security-jwt.md#pki)):
 - mTLS 雙方憑證**都由 PKI 簽發**——通常**自家 Internal CA**(企業內網用)而非公開 CA(Let's Encrypt 等)
 - **撤銷機制**(CRL / OCSP)在 mTLS 比單向 TLS 更重要:client cert 數量多,離職 / 設備換手就要立刻撤銷
-- **憑證輪替自動化**是長期維運關鍵(Step CA、HashiCorp Vault PKI、Istio Citadel)
+- **憑證輪替自動化**是長期維運關鍵(Step CA、[HashiCorp Vault](./E1-deployment-cicd.md#vault) PKI、Istio Citadel)
 
 **Spring Boot 啟用 mTLS Server**(`application.yml`):
 ```yaml
@@ -659,7 +659,7 @@ RestClient mtlsRestClient() throws Exception {
 - ❌ **TrustStore 沒包含中介 CA**:對方 cert 鏈不完整 → SSL handshake exception
 - ❌ **dev 環境關閉憑證驗證**(`TrustManager` 全信任) → 程式碼上 prod 沒改回來
 - ❌ **client cert revoke 沒生效**:server 要設定**定期 reload CRL** 或啟用 OCSP Stapling
-- ✅ **自動輪替**(cert-manager、Step CA、Vault PKI)+ **監控過期** + **prod 不關驗證**
+- ✅ **自動輪替**(cert-manager、Step CA、[Vault](./E1-deployment-cicd.md#vault) PKI)+ **監控過期** + **prod 不關驗證**
 
 **Java 工程師開發階段速查**:
 - 自簽憑證(dev / test):`mkcert localhost`(現代工具)、或 `keytool -genkeypair -storetype PKCS12 -keystore server.p12`

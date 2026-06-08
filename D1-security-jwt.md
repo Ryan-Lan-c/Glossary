@@ -42,6 +42,8 @@
 - [Rainbow Table(彩虹表攻擊)🟡](#rainbow-table)
 - [密碼雜湊:Argon2id / bcrypt / scrypt / PBKDF2 🟡](#password-hashing)
 - [AES-256(對稱加密)🟡](#aes-256)
+- [信封加密:DEK + KEK 🟡](#envelope-encryption)
+- [NIST(美國資安 / 密碼標準機構)🟡](#nist)
 
 ### PKI 與憑證(Public Key Infrastructure)
 - [PKI(公鑰基礎設施)🔴](#pki)
@@ -1625,7 +1627,7 @@ String plain = new String(dec.doFinal(cipherOut), StandardCharsets.UTF_8);
 
 **金鑰管理才是真正的難題**:
 - AES key **必須安全儲存**——明文存 DB 等於沒加密
-- 用 **KMS**(AWS KMS、GCP Cloud KMS、Azure Key Vault)、**HashiCorp Vault**、HSM
+- 用 **KMS**(AWS KMS、GCP Cloud KMS、Azure Key Vault)、**[HashiCorp Vault](./E1-deployment-cicd.md#vault)**、HSM(管 key 的標準做法是 [信封加密](#envelope-encryption))
 - 支援 **金鑰輪替**(key rotation):應用層用 key version,舊 key 仍保留以解舊資料
 - **加密金鑰不可進 git**
 
@@ -1637,6 +1639,66 @@ String plain = new String(dec.doFinal(cipherOut), StandardCharsets.UTF_8);
 - ❌ AES key 寫死在 code / 存 DB 明文 — 等於沒加密
 - ❌ 用 AES 加密密碼(密碼不該加密,而該 **hash**,見 [密碼雜湊](#password-hashing))
 - ✅ AES-256-GCM + 隨機 nonce + KMS 管 key
+
+---
+
+<a id="envelope-encryption"></a>
+### 信封加密(Envelope Encryption):DEK + KEK 🟡
+
+**定義**:不要拿「同一把 key」直接加密所有資料,而是分兩層——
+- **DEK**(Data Encryption Key,資料加密金鑰):對稱 key(如 [AES-256](#aes-256)),**實際拿來加密資料**。可以很多把(每個檔案 / 每筆記錄一把)。
+- **KEK**(Key Encryption Key,金鑰加密金鑰):**只拿來加密 DEK**,本身**永不離開 KMS / HSM**。
+
+把「被 KEK 加密過的 DEK(wrapped DEK)」和密文存在一起;要解密時,把 wrapped DEK 丟回 KMS,由 KMS 用 KEK 解出明文 DEK,再用 DEK 解資料。形狀就像「資料鎖進**信封**(DEK),信封再鎖進**保險箱**(KEK)」。
+
+**為什麼這樣設計**:
+- **效能**:對稱 DEK 加密大量資料很快;較貴的 KMS 呼叫 / 非對稱運算只用在「加密那把小小的 DEK」
+- **金鑰輪替便宜**:換 KEK 只需**重新包裝 DEK(幾十 bytes)**,不必重新加密 TB 級資料(**re-wrap 而非 re-encrypt**)
+- **隔離爆炸半徑**:每筆資料用不同 DEK,單一 DEK 外洩只影響那一筆;KEK 永遠不落地
+- **稽核 / 集中管控**:解密一定要呼叫 KMS → KMS 留下「誰在何時解了什麼」的紀錄
+
+**AWS KMS 典型流程**:
+```
+GenerateDataKey  → KMS 回傳 { 明文 DEK, 被 KEK 加密過的 DEK }
+    用明文 DEK 加密資料,然後立刻把明文 DEK 從記憶體丟掉
+    把「密文 + 被加密的 DEK」一起存起來
+Decrypt(被加密的 DEK) → KMS 用 KEK 解出明文 DEK → 應用再用它解資料
+```
+KEK 就是 KMS 裡的 CMK / Key;GCP Cloud KMS、Azure Key Vault、[HashiCorp Vault](./E1-deployment-cicd.md#vault) 的 **Transit engine** 同理。
+
+**反例**:
+- ❌ 用**一把 master key 直接**加密所有欄位 → 想輪替 key 得把整個 DB 重新加密一遍
+- ❌ 把 DEK 明文存在資料旁邊 → 等於沒加密
+- ✅ DEK 加密資料、KEK(在 KMS)加密 DEK、明文 DEK 用完即丟
+
+**你已經看過它的實例**:
+- [B4 TDE](./B4-persistence.md#tde) 的三層金鑰(Master Key → Certificate → DEK)就是信封加密——換 cert 不必重新加密整個 DB,只重包那把 DEK
+- [AES-256](#aes-256) 條目結尾說「金鑰管理才是真正的難題」,信封加密 + KMS 就是業界標準答案
+
+---
+
+<a id="nist"></a>
+### NIST(National Institute of Standards and Technology,美國國家標準暨技術研究院)🟡
+
+**定義**:美國商務部轄下的標準機構,範圍很廣(度量衡、材料……);但軟體工程師會碰到的主要是它的**資安 / 密碼學標準**——其出版品常被當成「業界該怎麼做」的權威依據,連非美系統也大量引用。
+
+**最常被引用的 NIST 出版品**:
+
+| 出版品 | 主題 | 你會在哪用到 |
+| --- | --- | --- |
+| **SP 800-63B** | 數位身份 / 密碼規範 | 「別再強制定期改密碼、別再硬性要求特殊符號」即出自此;見 [密碼雜湊](#password-hashing) |
+| **FIPS 140-2 / 140-3** | 加密模組驗證 | 政府 / 金融要求「FIPS 驗證過的加密實作」;見 [AES-256](#aes-256) |
+| **FIPS 197 / 180-4** | AES / SHA 演算法本身 | [AES-256](#aes-256)、[Hash](#hash) 的標準來源 |
+| **PQC(2024)** | 後量子密碼:ML-KEM(Kyber)、ML-DSA(Dilithium) | 抗量子遷移(呼應 AES-256「抗量子」討論) |
+| **CSF(Cybersecurity Framework)** | 資安治理框架(Identify / Protect / Detect / Respond / Recover) | 企業資安盤點、稽核 |
+| **SP 800-53** | 安全控制項清單 | 政府 / 合規(常與 FedRAMP 一起出現) |
+
+**為什麼工程師要知道**:
+- 合規場景(政府標案、金融、醫療)常**直接要求對齊某份 NIST 文件**
+- 它與 [OWASP](./D2-web-security.md)(偏 Web 攻防實務清單)互補:NIST 偏標準 / 治理 / 密碼學
+- 和 [RFC](./D3-networking.md#rfc)(IETF 的網路協定規範)定位不同:NIST 是美國政府標準、RFC 是網路協定標準
+
+> 一句話:遇到「要符合 NIST 800-63 / FIPS」這類需求,先來這裡對照是哪份文件、對應到本表哪個概念。
 
 ---
 
@@ -1901,7 +1963,7 @@ spec:
 **現況與生態**:
 - 全球 **> 50%** TLS 憑證來自 Let's Encrypt(2024 統計)
 - 啟發了競爭者:**ZeroSSL**(Sectigo)、**Google Trust Services**(Google 推自家免費 CA)、**Buypass Go SSL**
-- **企業內部 PKI**:仍用自家 CA + ACME(Step CA、HashiCorp Vault PKI、AWS Certificate Manager Private CA)
+- **企業內部 PKI**:仍用自家 CA + ACME(Step CA、[HashiCorp Vault](./E1-deployment-cicd.md#vault) PKI、AWS Certificate Manager Private CA)
 
 **反模式**:
 - ❌ 手動每 90 天更新 — 一定會忘,**該自動化**

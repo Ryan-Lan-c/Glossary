@@ -720,7 +720,7 @@ data:
 **Secret**:**機密資訊**(密碼、API Key、TLS 憑證),Base64 編碼(**不是加密!**)。生產環境應搭配:
 - **Sealed Secret**(Bitnami)— 加密的 Secret 可以放 git
 - **External Secrets Operator** — 從 Vault / AWS Secrets Manager 同步
-- **HashiCorp Vault** — 機密管理專用工具
+- **[HashiCorp Vault](#vault)** — 機密管理專用工具(詳見下方條目)
 
 **注入到 Pod**:可作為環境變數或檔案掛載。
 ```yaml
@@ -731,6 +731,42 @@ spec:
         - configMapRef: { name: myapp-config }
         - secretRef: { name: myapp-secret }
 ```
+
+---
+
+<a id="vault"></a>
+### HashiCorp Vault(機密管理 / Secrets Management)🟡
+
+**定義**:HashiCorp 出的**機密集中管理**工具——把密碼、API key、憑證、加密金鑰統一存放、控管存取、留稽核軌跡。核心特色是**動態機密(dynamic secrets)**:不存死的密碼,而是「**你要連 DB 時,Vault 現場生一組短效帳密給你,到期自動撤銷**」。
+
+**為什麼用**:
+- **不再到處散落 secret**:取代寫死在 code / `.env` / config 的密碼
+- **動態 + 短效**:DB / 雲端帳密用過即焚,大幅縮小外洩窗口
+- **加密即服務**:應用把資料丟給 Vault 加解密,自己永遠拿不到金鑰(Transit engine 即 [信封加密](./D1-security-jwt.md#envelope-encryption) 的 KEK 託管在 Vault)
+- **內建 PKI**:當私有 CA 簽發短效憑證(對應 [D1 PKI](./D1-security-jwt.md#pki) / [D3 mTLS 憑證輪替](./D3-networking.md#tls-mtls))
+- **完整稽核**:誰在何時取了什麼 secret 全有 log
+
+**主要 Secrets Engines**:
+
+| Engine | 用途 |
+| --- | --- |
+| **KV** | 靜態 key-value 機密(最基礎) |
+| **Dynamic Secrets** | 動態生 DB / AWS / 雲端短效帳密 |
+| **Transit** | 加密即服務(app 不碰金鑰,KEK 留在 Vault) |
+| **PKI** | 當私有 CA 簽發 / 輪替憑證 |
+
+**與 K8s 整合**:常透過 [External Secrets Operator](#namespace-config) 或 Vault Agent Sidecar 把 secret 注入 Pod,取代只有 Base64 編碼的 K8s Secret。
+
+**對照**:
+
+| 工具 | 定位 |
+| --- | --- |
+| **HashiCorp Vault** | 跨雲、可自架,功能最全(動態機密 / Transit / PKI) |
+| **AWS Secrets Manager / Parameter Store** | AWS 原生,綁雲 |
+| **Azure Key Vault / GCP Secret Manager** | 各雲原生 |
+| **K8s Secret** | 只是 Base64、**非加密**,需搭 Sealed Secret / ESO |
+
+> Vault 在本表是 canonical home;其他章節提到它時只給「一句話 + 連結」回此處——[D1 KMS](./D1-security-jwt.md#aes-256) / [D1 PKI](./D1-security-jwt.md#lets-encrypt)、[D3 mTLS 憑證輪替](./D3-networking.md#tls-mtls)、[B4 MySQL keyring](./B4-persistence.md#tde)。
 
 ---
 

@@ -705,7 +705,7 @@ public final class CacheKeyConstants {
 | --- | --- | --- | --- |
 | **SQL Server** | **TDE** | Enterprise 2008+;**Standard 2019+** 也支援 | Database Master Key + Certificate + DEK(Database Encryption Key);可整合 Azure Key Vault(EKM) |
 | **Oracle** | **Advanced Security TDE** | 需 Advanced Security 額外授權 | Wallet 或 Oracle Key Vault |
-| **MySQL** | **InnoDB Tablespace Encryption** | 5.7+ | Keyring(file / Vault / HashiCorp / AWS KMS) |
+| **MySQL** | **InnoDB Tablespace Encryption** | 5.7+ | Keyring(file / [HashiCorp Vault](./E1-deployment-cicd.md#vault) / AWS KMS) |
 | **PostgreSQL** | **無官方 TDE**(社群方案、雲廠商加值) | — | 自家 patch、雲廠 RDS / Aurora 提供 |
 | **PostgreSQL 雲版** | RDS / Aurora 加密、GCP Cloud SQL 加密 | 雲廠提供 | AWS KMS / GCP Cloud KMS |
 | **MariaDB** | **Data-at-Rest Encryption** | 10.1+ | file_key_management、AWS KMS plugin |
@@ -756,6 +756,8 @@ flowchart TB
 - **DEK** 對稱 key 加密實際資料(對稱快、適合大量資料)
 - **Cert / Asymmetric** 加密 DEK,**換 cert 不需重新加密所有資料**(只加密那把 DEK)
 - **Master Key** 在最頂層,通常從 OS / HSM / KMS 派生
+
+> 這個「DEK 加密資料、上層 key 加密 DEK」的兩層結構,就是通用的 **信封加密(Envelope Encryption)** 的一種實例;通用概念與 KMS 流程見 [D1 信封加密:DEK + KEK](./D1-security-jwt.md#envelope-encryption)。
 
 **效能影響**:
 - CPU **5~15%** 開銷(SQL Server 官方數字)

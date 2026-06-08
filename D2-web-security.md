@@ -12,6 +12,7 @@
 - [CORS 🟢](#cors)
 - [CSRF 🟡](#csrf)
 - [XSS 🟡](#xss)
+- [IDOR(不安全的直接物件參照)🟡](#idor)
 
 ### 偵測與防禦
 - [IDS / IPS(入侵偵測與防禦)🟡](#ids)
@@ -112,6 +113,54 @@ public String search(@RequestParam String q) {
 }
 ```
 正確做法是用模板引擎(Thymeleaf 等)讓框架自動 escape,或手動 `HtmlUtils.htmlEscape(q)`。
+
+---
+
+<a id="idor"></a>
+### IDOR(Insecure Direct Object Reference,不安全的直接物件參照)🟡
+
+**定義**:API / 網頁直接用使用者可控的識別碼(`/orders/1003`、`?userId=42`)存取物件,卻**只驗證「你登入了沒」(AuthN),沒驗證「這筆資料是不是你的」(物件層級授權)**。攻擊者把 id 換成別人的,就讀到 / 改到不該碰的資料。屬 OWASP Top 10 **A01 Broken Access Control** 最常見的一種。
+
+**為什麼重要**:
+- 不需繞過登入、不需 SQL Injection——**帶著自己合法的 token,只改個 id**,門檻極低
+- 請求本身完全合法,自動化掃描難抓,多半得靠 code review / 邏輯測試
+- 真實案例多:改 `accountId` 看別人帳單、改 `fileId` 下載別人合約
+
+**典型場景**:
+```
+GET /api/orders/1003        ← 我的訂單
+GET /api/orders/1004        ← id +1 變成別人的,server 卻照回 200
+```
+
+**Spring 防禦(關鍵:每次都檢查擁有者)**:
+```java
+@GetMapping("/api/orders/{id}")
+public OrderDto get(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+    Order o = orderRepo.findById(id).orElseThrow();
+    // ★ 物件層級授權:這筆訂單屬於當前使用者嗎?
+    if (!o.getOwnerId().equals(jwt.getSubject())) {
+        throw new AccessDeniedException("not your order"); // → 403
+    }
+    return toDto(o);
+}
+```
+或用 Spring Security 方法級授權:`@PostAuthorize("returnObject.ownerId == authentication.name")`。
+
+**反例(只驗登入、不驗擁有者)**:
+```java
+@GetMapping("/api/orders/{id}")
+public OrderDto get(@PathVariable Long id) {
+    return toDto(orderRepo.findById(id).orElseThrow()); // ❌ 任何登入者都能查任何 id
+}
+```
+
+**防禦清單**:
+- ✅ **每個讀/寫都做物件層級授權**(`ownerId` / `tenantId` 比對),別只靠「有沒有登入」
+- ✅ 落實 [Least Privilege](./D1-security-jwt.md#least-privilege) 與 [ACL / RBAC / ABAC](./D1-security-jwt.md#rbac) 的授權模型;IDOR 本質就是「授權模型沒落實到物件層級」
+- ✅ 用**不可預測的識別碼**(UUID / ULID)可緩解列舉,但**不能取代授權檢查**(security by obscurity 不算防禦)
+- ✅ 多租戶系統:查詢一律帶 `WHERE tenant_id = :current`,從 DB 層就隔離
+
+> IDOR 是「攻擊面 / 怎麼被打穿」;對應的「授權模型 / 誰能做什麼」詳見 [D1 ACL / RBAC / ABAC](./D1-security-jwt.md#rbac)。
 
 ---
 

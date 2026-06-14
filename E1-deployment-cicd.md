@@ -47,6 +47,8 @@ flowchart LR
 - [Service 🟡](#service)
 - [Ingress 🟡](#ingress)
 - [Namespace / ConfigMap / Secret 🟡](#namespace-config)
+- [HashiCorp Vault(機密管理)🟡](#vault)
+- [OpenBao(Vault 的開源 fork)🟡](#openbao)
 - [Helm 🟡](#helm)
 - [GitOps / ArgoCD 🔴](#gitops)
 
@@ -767,6 +769,26 @@ spec:
 | **K8s Secret** | 只是 Base64、**非加密**,需搭 Sealed Secret / ESO |
 
 > Vault 在本表是 canonical home;其他章節提到它時只給「一句話 + 連結」回此處——[D1 KMS](./D1-security-jwt.md#aes-256) / [D1 PKI](./D1-security-jwt.md#lets-encrypt)、[D3 mTLS 憑證輪替](./D3-networking.md#tls-mtls)、[B4 MySQL keyring](./B4-persistence.md#tde)。
+
+---
+
+<a id="openbao"></a>
+### OpenBao(Vault 的開源 fork)🟡
+
+**定義**:OpenBao 是 [HashiCorp Vault](#vault) 的**開源分支(fork)**——機制、CLI、API、Secrets Engine 幾乎與 Vault 相同(早期版本可當 drop-in 替代),核心差異在**授權與治理**:OpenBao 採 **MPL 2.0**(OSI 認可的開源),由 **Linux Foundation** 中立託管。
+
+**為什麼會出現**:2023 年 8 月 HashiCorp 把 Vault(連同 Terraform / Consul / Nomad 等)從 MPL 2.0 改成 **BSL(Business Source License) 1.1**——程式碼仍可看(source-available),但**不再是 OSI 認可的開源**,且禁止「拿去做與 HashiCorp 競爭的商業服務」。社群為延續真開源版本而 fork 出 OpenBao,2023 年底進入 Linux Foundation。
+
+**和 Vault 怎麼選**:
+
+| | HashiCorp Vault | OpenBao |
+| --- | --- | --- |
+| 授權 | BSL 1.1(source-available,非 OSI 開源) | MPL 2.0(OSI 開源) |
+| 治理 | HashiCorp(2025 年被 IBM 收購) | Linux Foundation(廠商中立) |
+| 功能 | 含 Enterprise 付費功能 | 社群開源功能,持續演進 |
+| 相容性 | — | fork 自 Vault,CLI / API 大致相容 |
+
+> 機密管理本身的機制(動態機密 / KV / Transit / PKI / 與 K8s 整合)兩者共通,詳見上方 [HashiCorp Vault](#vault) 主場條目,此處不重複。
 
 ---
 

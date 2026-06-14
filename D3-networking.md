@@ -44,6 +44,9 @@ Java 工程師雖然不直接配置網路設備,但**部署、跨機房連線、
 - [APISIX(雲原生 API Gateway)🟡](#apisix)
 - [Kong(API Gateway)🟡](#kong)
 
+### 服務發現 / Service Mesh
+- [Consul(服務發現 / Service Mesh)🟡](#consul)
+
 ### 企業網路
 - [VPN 🟡](#vpn)
 - [MPLS 🔴](#mpls)
@@ -591,7 +594,7 @@ sequenceDiagram
 
 | 情境 | 為什麼 mTLS 而非單向 TLS |
 | --- | --- |
-| **Service Mesh 內部通訊**(Istio / Linkerd / Consul) | 微服務眾多,**任一台被攻陷不該能假冒其他服務** |
+| **Service Mesh 內部通訊**(Istio / Linkerd / [Consul](#consul)) | 微服務眾多,**任一台被攻陷不該能假冒其他服務** |
 | **B2B API 對接**(銀行、政府、企業夥伴) | 不能光靠 API Key——憑證是更強的身份證明 |
 | **IoT / Edge 設備接入** | 每台設備有自己的 client cert,可細粒度撤銷 |
 | **Zero Trust 架構**(BeyondCorp / SASE) | 「**永不信任,持續驗證**」——每個請求都驗 client |
@@ -896,6 +899,36 @@ services:
 - 老團隊、生態優先、需企業 SaaS、AI Gateway 場景 → **Kong**
 - 新建系統、追求效能、雲原生、etcd 既有 → **APISIX**
 - 兩者底層同源(NGINX + Lua),**性能差距已不顯著,選擇主要看生態與企業支援**
+
+---
+
+## 服務發現 / Service Mesh
+
+<a id="consul"></a>
+### Consul(服務發現 / Service Mesh)🟡
+
+**定義**:HashiCorp 出的**服務網路(service networking)**平台,一套工具涵蓋四件事:
+- **服務發現(Service Discovery)**:服務啟動時向 Consul 註冊,別的服務透過 Consul 的 DNS / HTTP API 查到對方位址,不必寫死 IP
+- **健康檢查(Health Check)**:定期探測服務存活,自動把掛掉的實例移出可用清單
+- **KV Store**:內建 key-value 儲存,放動態配置 / feature flag
+- **Service Mesh(Consul Connect)**:靠 sidecar proxy(Envoy)做服務間 mTLS 與授權(intentions),與 [Istio / Linkerd](#tls-mtls) 同類
+
+**為什麼用**:
+- 微服務動態擴縮、IP 一直變,**靠 Consul 動態解析**取代靜態設定 / 手改 nginx upstream
+- **跨平台**:不限 K8s——VM、裸機、多 datacenter 都能用(K8s 內建服務發現只管 cluster 內,見 [E1 K8s Service](./E1-deployment-cicd.md#service))
+- service mesh 模式下,服務間通訊自動加密、零信任授權
+
+**與相近工具的關係**:
+
+| 工具 | 定位 |
+| --- | --- |
+| **Consul** | 服務發現 + KV + service mesh,跨平台、可自架 |
+| **K8s 內建 Service / DNS** | 只在 K8s cluster 內做服務發現 |
+| **Istio / Linkerd** | 純 service mesh(東西向 mTLS),見 [mTLS 自動化](#tls-mtls) |
+| **SmallRye Stork / Eureka** | 偏 client-side 服務發現(見 [B7 SmallRye](./B7-quarkus.md)) |
+
+> service mesh 的 mTLS 自動化(sidecar、憑證輪替)主場在 [TLS / mTLS](#tls-mtls),此處不重複。
+> **授權註記**:Consul 與 [Vault](./E1-deployment-cicd.md#vault) 一樣在 2023 年被 HashiCorp 改成 BSL 授權(背景見 [OpenBao](./E1-deployment-cicd.md#openbao)),但 Consul 目前沒有同等普及的開源 fork。
 
 ---
 

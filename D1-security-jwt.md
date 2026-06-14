@@ -54,6 +54,7 @@
 ### 安全原則(Security Principles)
 - [Defense in Depth(縱深防禦)🟡](#defense-in-depth)
 - [Least Privilege(最小權限原則)🟡](#least-privilege)
+- [PAM(Privileged Access Management / 特權存取管理)🟡](#pam)
 
 ---
 
@@ -2036,7 +2037,45 @@ flowchart LR
 - API Key 分功能、可撤銷、有效期短
 - Pod 用非 root user 跑
 
-**搭配**:**Just-in-Time Access**(臨時提升權限,限時自動回收)、**定期權限審計**、**離職立即撤權**。
+**搭配**:**Just-in-Time Access**(臨時提升權限,限時自動回收)、**定期權限審計**、**離職立即撤權**。對**特權帳號**(root / DBA / admin)的最小權限,實務上由 [PAM](#pam) 工具集中落實。
+
+---
+
+<a id="pam"></a>
+### PAM(Privileged Access Management / 特權存取管理)🟡
+
+**定義**:專門**管理、保護、稽核「特權帳號」**的一整套機制與工具。特權帳號 = 擁有高權限、能改系統 / 看敏感資料的帳號:**root / Administrator / DBA / `sa` / 雲端 root / 網路設備 admin / 高權限 service account**。
+
+**為什麼用**:特權帳號是攻擊者的**頭號目標**——一旦拿到,等於拿到全域控制權(blast radius 最大)。PAM 把這些高權限憑證**集中保管、限時發放、全程錄影稽核**,等於把 [Least Privilege](#least-privilege) 從「程式 / 服務」延伸落實到「**人**」的層面。
+
+**PAM 六大核心能力**:
+
+| 能力 | 做什麼 | 解決的問題 |
+| --- | --- | --- |
+| **憑證保管庫(Credential Vault)** | 特權密碼集中加密保管,使用者「借用」而非直接知道密碼 | 密碼共用、寫在便利貼 / 腳本裡 |
+| **自動輪替(Password Rotation)** | 用完即換、定期輪替 | 密碼長年不變、離職員工還記得 |
+| **JIT 提權(Just-in-Time Access)** | 平時 **zero standing privilege**,需要時限時提升、到期自動回收 | 帳號長期掛著管理員權限 |
+| **Session 錄影 / 監控** | 特權連線全程錄影,可即時中斷可疑操作 | 出事後查不到「誰做了什麼」 |
+| **跳板 / Bastion(Proxy)** | 透過 PAM proxy 連目標主機,admin 不直接碰目標 | 直連目標、繞過稽核 |
+| **稽核 / 合規(Audit)** | 完整記錄:誰、何時、用哪個特權帳號、做了什麼 | 法規 / 稽核要求可追溯 |
+
+**PAM vs 相關概念(常混淆)**:
+
+| 概念 | 範圍 | 與 PAM 關係 |
+| --- | --- | --- |
+| **IAM**(Identity & Access Management) | 管**所有人**的身份與存取 | PAM 是 IAM 中**專管特權帳號**的子集 |
+| **PIM**(Privileged Identity Management) | 微軟 Entra 用語 | 約等於 PAM 的 **JIT 提權**部分 |
+| **[Least Privilege](#least-privilege)** | 安全**原則** | PAM 是落實此原則(對特權帳號)的**工具** |
+| **[HashiCorp Vault](./E1-deployment-cicd.md#vault)** | secrets 管理,偏**機器 / 應用**的動態機密 | PAM 偏**人 / 互動式 session** 的特權帳號;兩者重疊但側重不同 |
+
+**主要工具 / 廠商**:**CyberArk**、**Delinea**(見下)、**BeyondTrust**、微軟 **Entra PIM**、HashiCorp Boundary。
+
+**Delinea**:PAM 市場領導者之一,由 **Thycotic 與 Centrify 於 2021 年合併**後改名而來。旗艦產品 **Secret Server**(特權密碼保管庫,PAM 的核心)、**Privilege Manager**(端點最小權限 / 移除本機 admin)、**DevOps Secrets Vault**(給 CI/CD 與應用用的機密管理)。與 **CyberArk** 並列為企業 PAM 的兩大主流選擇。
+
+**反模式**:
+- ❌ 把 root / `sa` 密碼寫進部署腳本、設定檔、或團隊共用的密碼本
+- ❌ 所有人共用同一組 admin 帳號 — 出事查不到責任歸屬
+- ❌ 管理員權限「一給就是永久」,沒有 JIT、沒有定期 review
 
 ---
 

@@ -56,6 +56,7 @@ flowchart LR
 - [Contract-Driven Development 🔴](#contract-driven)
 
 ### 流程相關
+- [SDLC(Software Development Life Cycle / 軟體開發生命週期)🟢](#sdlc)
 - [Agile / Scrum / Kanban 🟢](#agile)
 - [Waterfall(瀑布式)🟢](#waterfall)
 - [MVP(Minimum Viable Product / 最小可行產品)🟢](#mvp)
@@ -784,6 +785,59 @@ public RequestResponsePact userExists(PactDslWithProvider builder) {
 ---
 
 ## 流程相關
+
+<a id="sdlc"></a>
+### SDLC(Software Development Life Cycle / 軟體開發生命週期)🟢
+
+**定義**:軟體從**構想到退役**的完整階段框架——典型六階段:**需求 → 設計 → 實作 → 測試 → 部署 → 維運(到退役)**。SDLC 描述「**有哪些階段**」,不規定「**怎麼跑這些階段**」。
+
+**為什麼用**:
+- **共同語彙**:團隊對「現在走到哪一步、下一步要交付什麼」有一致認知
+- **不漏關鍵活動**:需求分析、設計審查、測試、上線前檢核都被框進流程,不會跳過
+- **合規 / 稽核**:ISO 12207、CMMI、金融 / 醫療法規常要求依 SDLC 留下各階段產出與簽核紀錄
+
+**SDLC vs 方法論(最常混淆,先釐清)**:
+
+| | SDLC | 方法論(Methodology) |
+| --- | --- | --- |
+| 回答 | **有哪些階段**(What) | **怎麼跑這些階段**(How) |
+| 例子 | 需求 / 設計 / 實作 / 測試 / 部署 / 維運 | [Waterfall](#waterfall)、[Agile](#agile)、DevOps |
+| 關係 | 同一套階段… | …可用不同方法論執行 |
+
+- **[Waterfall](#waterfall)**:把六階段**一次線性走完**(它的定義就是這條 SDLC 流水線)
+- **[Agile](#agile)**:每個 Sprint **跑一輪迷你 SDLC**(小批需求 → 設計 → 寫 → 測 → 交付),反覆迭代
+- 所以「SDLC ≠ Waterfall」——Waterfall 只是執行 SDLC 的**其中一種**模型
+
+**六大階段**:
+
+| 階段 | 主要活動 | 產出 |
+| --- | --- | --- |
+| 需求(Requirements) | 訪談、需求分析 | SRS / User Story / 驗收條件 |
+| 設計(Design) | 架構、資料庫、API 設計 | 架構圖、ER 圖、[OpenAPI](#api-first) 規格 |
+| 實作(Implementation) | 寫 code(可搭 [TDD](#tdd) / [BDD](#bdd)) | 原始碼、單元測試 |
+| 測試(Testing) | 整合 / 系統 / 驗收測試 | 測試報告、缺陷清單 |
+| 部署(Deployment) | 上線、發布(可搭 [CI/CD](./E1-deployment-cicd.md)) | 可運行的系統 |
+| 維運(Maintenance) | 修 bug、監控、優化、最終退役 | 更新、Patch、Postmortem |
+
+**常見 SDLC 模型**:
+
+| 模型 | 特徵 | 適用 |
+| --- | --- | --- |
+| **Waterfall** | 線性、階段嚴格 | 需求穩定、合約 / 政府專案 |
+| **V-Model** | Waterfall 變體,每個開發階段對應一個測試階段 | 高可靠度系統(醫療、航太) |
+| **Iterative / Incremental** | 分批交付、逐步累積功能 | 需求會演進 |
+| **Spiral** | 每圈做風險評估 + 原型 | 高風險、大型專案 |
+| **[Agile](#agile)** | 短迭代、擁抱變化 | 需求變動快、要快速回饋 |
+| **DevOps** | 開發 + 維運打通,持續交付 | 雲原生、需頻繁上線 |
+
+**Secure SDLC(SSDLC)/ Shift-Left**:把**安全活動左移**進 SDLC 早期,而非上線前才補——設計階段做威脅建模、實作階段跑 SAST([Checkmarx / SonarQube / Snyk](./E1-deployment-cicd.md))、測試階段跑 DAST,連結 [D2 Web 攻擊防禦](./D2-web-security.md)。「越早發現缺陷,修復成本越低」是 SDLC 的核心經濟學。
+
+**與本章其他概念的關係**:
+- **SDLC 是框架,[Agile](#agile) / [Waterfall](#waterfall) 是執行模型**——別把 SDLC 跟某個方法論畫上等號
+- **[TDD](#tdd) / [BDD](#bdd)** 是 SDLC「實作 / 測試」階段內的實踐,不是 SDLC 本身
+- **[MVP](#mvp)** 是產品策略,常以「跑數輪極短 SDLC」的方式快速驗證假設
+
+---
 
 <a id="agile"></a>
 ### Agile / Scrum / Kanban 🟢

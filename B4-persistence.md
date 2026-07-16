@@ -35,7 +35,11 @@
 ### 資料安全
 - [TDE(Transparent Data Encryption)🟡](#tde)
 
+### 索引
+- [Clustered / Non-clustered Index 🟡](#clustered-index)
+
 ### 進階模式
+- [分散式交易協定(2PC / 3PC / XA / JTA)🔴](#distributed-tx)
 - [Outbox Pattern 🔴](#outbox)
 - [Saga Pattern(跨系統 Rollback)🔴](#saga)
 - [CQRS 🔴](#cqrs)
@@ -814,7 +818,58 @@ flowchart TB
 
 ---
 
+## 索引(Index)
+
+<a id="clustered-index"></a>
+### Clustered / Non-clustered Index 🟡
+
+**定義**:索引依「**是否決定資料列的實體儲存順序**」分兩類。
+
+**Clustered Index(叢集 / 聚簇索引)**:決定資料表**實體儲存順序**,葉節點**就是實際資料列**。一表**只能一個**(實體排序只有一種),InnoDB / SQL Server 通常就是 primary key。範圍查詢快(資料連續)。
+
+**Non-clustered Index(非叢集 / 二級索引)**:獨立於資料實體順序,葉節點存「索引鍵 + 指向資料的指標」(RID,或 InnoDB 的 clustered key)。一表**可多個**。查詢常需**回表**(key lookup / bookmark lookup):先在索引找指標,再撈完整列,多一次 I/O。
+
+**Covering Index(涵蓋索引)**:把查詢需要的欄位全放進索引 → **免回表**。
+
+**範例**(InnoDB):PK = clustered;其他索引 = secondary(non-clustered),葉節點存 PK 值,回表時用 PK 再查一次 clustered index。
+
+**口訣**:clustered = 資料本身排序、一表一個;non-clustered = 額外查找表、可多個、可能回表。
+
+**關聯**:底層結構見 [G1 B-Tree / B+Tree](./G1-data-structures.md#b-tree);為何 `LIKE 'abc%'` 走索引、複合索引最左前綴,也在 G1。
+
+---
+
 ## 進階模式
+
+<a id="distributed-tx"></a>
+### 分散式交易協定(2PC / 3PC / XA / JTA)🔴
+
+**定義**:一筆交易橫跨多個資源(多 DB、DB + MQ)或多個服務時,要嘛全部成功、要嘛全部失敗,需要協定來協調。這組名詞是「傳統強一致」路線,[Saga](#saga) / [Outbox](#outbox) 是它在微服務下的替代。
+
+**2PC(Two-Phase Commit,兩階段提交)**
+- 角色:Coordinator(協調者)+ Participants(參與者)。
+- Phase 1 Prepare:協調者問「可以 commit 嗎」,參與者寫 undo/redo log、鎖資源、回 Yes/No。
+- Phase 2 Commit / Abort:全 Yes → commit;任一 No → abort。
+- 致命傷:**blocking** — 協調者在 Phase 2 掛掉,已投 Yes 的參與者持鎖卡死;同步等待、單點故障、效能差。
+
+**3PC(Three-Phase Commit)**:為解 blocking,在 Prepare 與 Commit 間插入 **PreCommit** 並全程加 timeout(`CanCommit?` → `PreCommit` → `DoCommit`),讓參與者在協調者失聯時能自主決策。但多一輪往返、效能更差、network partition 下仍可能不一致 → **實務罕用**,多為教材 / 面試題。
+
+**XA**:不是演算法,是 X/Open(現 The Open Group)**DTP 模型的標準規範**,定義 TM(Transaction Manager)與 RM(Resource Manager)之間的介面(`xa_prepare` / `xa_commit`…);底層執行的就是 2PC。需 DB / driver 支援(MySQL XA、Oracle XA)。
+
+**JTA(Jakarta Transaction API)**:XA 的 Java 版 API,資源實作 `XAResource`、資料源用 `XADataSource`。實作引擎:**Narayana**(WildFly / Quarkus)、**Atomikos**(Spring Boot 常用);Bitronix 已於 Spring Boot 3.0 移除。
+
+**Crash Recovery / in-doubt transaction**:2PC 最怕協調者中途掛掉。可靠的 TM(如 Narayana)靠 transaction log + recovery manager,重啟後把「已 prepare 未 commit」的 in-doubt 交易補完或回滾——**有沒有 recovery 是能不能上 production 的分水嶺**。
+
+**一致性光譜**
+- **強一致(Strong Consistency)**:2PC / XA 保證交易結束時所有節點一致,代價是阻塞、低可用。
+- **最終一致(Eventual Consistency)**:放棄即時一致,只保證「**若無新更新,所有副本最終收斂到一致**」,中間狀態短暫可見。[Saga](#saga)、[Outbox](#outbox)、多數分散式複製 / 快取都走這條,是 CAP 下選 AP 的必然結果。
+- 一句話:**2PC 用可用性換一致性;Saga 用一致性(退成最終一致)換可用性**。
+
+**關係**:與 [Saga](#saga) 互為替代方案(見 Saga 條目對照表);與 [Transaction Propagation](#tx-propagation) 不同層級(那是單機 `@Transactional` 傳播,別混淆);跨服務改用 [Outbox](#outbox)。
+
+**何時用**:單服務多資源(DB + MQ)要強一致 → XA / JTA 仍合理;跨多個微服務 → 避免分散式 2PC,走 Saga / Outbox。
+
+---
 
 <a id="outbox"></a>
 ### Outbox Pattern 🔴
@@ -970,6 +1025,8 @@ public class CreateOrderSaga {
 
 #### Saga vs 2PC(XA)vs TCC 對照
 
+> 各協定的完整定義見 [分散式交易協定(2PC / 3PC / XA / JTA)](#distributed-tx);下表聚焦與 Saga 的取捨對照。
+
 | 維度 | 2PC / XA | TCC(Try-Confirm-Cancel) | Saga |
 | --- | --- | --- | --- |
 | 一致性 | 強一致(ACID) | 較強(資源預留) | **最終一致** |
@@ -1018,8 +1075,15 @@ public class CreateOrderSaga {
 
 **定義**:**不存當前狀態**,而是把所有「狀態改變的事件」依序儲存,當前狀態 = 重放所有事件的結果。
 
-**好處**:完整審計、時光回溯、CQRS 天然搭配。
-**代價**:複雜度爆炸、事件模型升級困難——只在真的需要時才用。
+**為什麼用**:完整審計軌跡(每次變更都是不可變事件,天然合規)、時光回溯(重建任意時間點狀態、debug「當時發生什麼」)、與 [CQRS](./A3-architecture.md#cqrs) 天然搭配(事件流投影成多個讀模型)、事件為一等公民便於驅動 Choreography [Saga](#saga)。
+
+**核心元件**:Event Store(只 append、不可變)、Aggregate(重放事件流得當前狀態)、**Snapshot(快照)**(事件太多重放慢 → 定期存快照,之後只重放快照後事件)、Projection / Read Model(投影成查詢視圖,常配 CQRS)。
+
+**範例**:帳戶事件流 `AccountOpened → Deposited(100) → Withdrawn(30)`,當前餘額 = 重放 = 70;存的是這串事件,而非「餘額 = 70」。
+
+**代價**:複雜度爆炸;事件 schema 演進困難(舊事件不可改,要 versioning / upcasting);讀模型為非同步投影 → 最終一致。
+
+**何時用 / 不用**:用於強稽核(金融、帳務、法遵)、需完整歷史、事件驅動架構;純 CRUD、無稽核需求、團隊不熟則**別為用而用**。
 
 ---
 

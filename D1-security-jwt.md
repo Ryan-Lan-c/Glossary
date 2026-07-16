@@ -1701,6 +1701,8 @@ KEK 就是 KMS 裡的 CMK / Key;GCP Cloud KMS、Azure Key Vault、[HashiCorp Vau
 
 > 一句話:遇到「要符合 NIST 800-63 / FIPS」這類需求,先來這裡對照是哪份文件、對應到本表哪個概念。
 
+**與 ISO / DJCP 的分工**:NIST(含 CSF)是**技術 / 治理框架**、屬自願參考;若要談「可稽核、可發證」的組織管理系統(**ISO 27001 / 27701**)或中國**法定**的 **DJCP(等保)**,見 [A4 企業管理系統標準與認證](./A4-methodology.md#management-system-standards)。
+
 ---
 
 ## PKI 與憑證(Public Key Infrastructure)

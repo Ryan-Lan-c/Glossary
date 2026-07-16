@@ -64,6 +64,9 @@ flowchart LR
 ### 比較
 - [一張表看懂各種「-Driven Development」🟡](#summary-table)
 
+### 標準、認證與合規
+- [企業管理系統標準與認證(ISO / CMMI / DJCP)🟡](#management-system-standards)
+
 ---
 
 ## 規格驅動家族
@@ -971,6 +974,37 @@ flowchart LR
 | **Spec-First** | — | **書面規格** | 文件(可含上述任一) | Confluence + OpenAPI |
 | **SRS-Driven / Document-Driven** | — | **完整 SRS 文件** | Word / Confluence | (流程為主) |
 | **CDC** | Consumer-Driven Contract | **消費方契約** | Pact 檔 | Pact、Spring Cloud Contract |
+
+---
+
+## 標準、認證與合規
+
+<a id="management-system-standards"></a>
+### 企業管理系統標準與認證(ISO / CMMI / DJCP)🟡
+
+**定義**:由第三方稽核、可「取證」的**組織層級管理系統標準與合規制度**。跟 [SDLC](#sdlc) / [各種 -Driven 方法論](#summary-table) 談「團隊怎麼開發」不同,這些談的是「**組織有沒有一套被驗證過的制度**」——投標門檻、客戶稽核、進入特定市場時常被直接要求。開發時聽到的「這樣設計過不過 27001」,指的就是這類標準的控制要求。
+
+**六個常見標準速記**:
+
+| 標準 | 主題 | 性質 | 一句話 |
+| --- | --- | --- | --- |
+| **CMMI v2.0** | 開發流程成熟度 | 流程框架(非管理系統) | 評鑑開發流程成熟度,Level 1~5,多以 L3 為目標 |
+| **DJCP(等保)** | 中國網路安全 | 中國**法定**制度 | 中國境內營運系統的強制門檻,分五級,公安部主管 |
+| **ISO 9001** | 品質 | 管理系統(QMS) | 最基礎最普及的品質管理,PDCA + 風險思維 |
+| **ISO 20000** | IT 服務 | 管理系統(ITSM) | ITIL 的可驗證標準版,規範 SLA / 事件 / 變更管理 |
+| **ISO 27001** | 資訊安全 | 管理系統(ISMS) | 最被認可的資安認證,守 CIA,附錄 A 控制措施 |
+| **ISO 27701** | 隱私 | 管理系統(PIMS,27001 擴充) | 在 27001 上加 PII 控制,對應 GDPR / 個資法 |
+
+**三個最容易搞混的關係**:
+- **ISO 27701 不能單獨驗證**——它是 27001 的擴充,必須先有(或同時取得)27001。
+- **DJCP 不是 ISO**——ISO 是自願性國際認證,DJCP 是中國境內的**法定要求**。
+- **CMMI 不是「管理系統」**——它是流程成熟度框架,不同於 ISO「建制度 → 稽核 → 發證」那類。
+
+**一句話總結**:9001 顧品質、20000 顧服務、27001 顧資安、27701 在資安上再顧隱私、CMMI 顧開發流程成熟度、DJCP 是進中國市場的法定資安門檻。
+
+**與其他章節的關係**:
+- ISO 27001 / 27701 的資安控制,技術落地對應 [D1 Security](./D1-security-jwt.md)(加密 / 存取控制 / [NIST](./D1-security-jwt.md#nist))、[D2 Web 攻擊防禦](./D2-web-security.md)、[E1 SAST/DAST 掃描](./E1-deployment-cicd.md)。
+- CMMI / 合規稽核要求依 [SDLC](#sdlc) 留下各階段產出與簽核。
 
 ---
 

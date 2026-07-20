@@ -39,6 +39,7 @@
 ### 具體 Agent 框架與工具
 - [Hermes Agent 🟡](#hermes-agent)
 - [Browser Agent(AI 驅動瀏覽器)🟡](#browser-agent)
+- [LLM-ready 網頁擷取(Crawl4AI / Firecrawl)🟡](#web-extraction)
 - [LangChain / LlamaIndex 🟡](#langchain)
 - [LSP(Language Server Protocol)🟡](#language-server-protocol)
 - [MCP(Model Context Protocol)🔴](#mcp)
@@ -430,6 +431,47 @@ Final Answer: 您的訂單已出貨
 **Java 端整合**:目前主流仍是 Python 生態(Browser Use、Playwright Python)。Java 工程師**比較常做的事**是**建構後端供 Browser Agent 呼叫的 API**,而非自己跑 Browser Agent。
 
 **注意**:Browser Agent 仍**不穩定且燒 token**,且**安全議題嚴重**(讓 LLM 控制瀏覽器 = 它能登入、轉帳、刪檔)。**沙箱與審計必備**。
+
+---
+
+<a id="web-extraction"></a>
+### LLM-ready 網頁擷取(Crawl4AI / Firecrawl)🟡
+
+**定義**:把網頁自動轉成**乾淨、結構化、LLM 可直接吃的 Markdown**,當作 [RAG](#rag) / Agent 的「資料進料端」。解決傳統爬蟲(BeautifulSoup / Scrapy)的兩大痛點——抓回來的是**滿是雜訊的原始 HTML**、且遇到 JavaScript 動態網站會抓到**空殼**。
+
+**為什麼用**:
+- 內建**無頭瀏覽器**(headless browser),能執行 JS、等動態內容載入
+- 自動過濾導覽列 / 廣告 / script,輸出**正文 Markdown**,省掉 RAG 前最麻煩的清洗步驟
+- 正好補上 [RAG](#rag) 流程裡「Document Loader(讀網頁)+ Chunking」這一段
+
+**Crawl4AI vs Firecrawl 對照**:
+
+| 面向 | Crawl4AI | Firecrawl |
+| --- | --- | --- |
+| 型態 | **開源自架**(Apache 2.0,73k+ ★) | 商用 **SaaS API**(核心開源,主打雲端) |
+| 費用 | 免費 | 按用量計費(有免費額度) |
+| 底層 | Playwright(Chromium / Firefox / WebKit) | 託管式爬取基礎設施 |
+| 特色 | 完整瀏覽器控制、stealth 反偵測、adaptive crawling、**可配本地 LLM(Ollama)零 API key** | 開箱即用、`/scrape`・`/crawl` API 極簡、零維運 |
+| 取捨 | 要自架 / 資料不外流 / 要客製 → 選它 | 要快速整合 / 不想維運爬蟲 → 選它 |
+
+**和 [Browser Agent](#browser-agent) 的區隔**(別混淆):
+- **Browser Agent** = LLM 自主「**操作**」網頁(點按、填表、完成任務)
+- **網頁擷取** = 把網頁「**擷取**」成資料餵給 LLM,本身**不做決策**
+
+**範例(Crawl4AI)**:
+```python
+import asyncio
+from crawl4ai import AsyncWebCrawler
+
+async def main():
+    async with AsyncWebCrawler() as crawler:
+        result = await crawler.arun(url="https://example.com")
+        print(result.markdown)   # 乾淨、可直接餵 LLM 的 Markdown
+
+asyncio.run(main())
+```
+
+**Java 端**:兩者皆 Python 生態。Java 工程師常做的是**呼叫其 REST API**(Crawl4AI 可 Docker 自架成 FastAPI 服務、Firecrawl 直接打雲端 API),把回傳的 Markdown 接進 [Spring AI](#spring-ai) / [LangChain4j](#langchain4j) 的 RAG pipeline。
 
 ---
 
